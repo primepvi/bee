@@ -1,0 +1,18 @@
+pub enum TokenKind {
+    Eof,
+
+    Const,
+    Var,
+    Begin,
+    End,
+
+    Number,
+    String,
+    Identifier,
+    
+    Equal,
+}
+
+pub struct Lexer {
+    
+}
