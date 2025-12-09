@@ -1,4 +1,11 @@
-use std::fmt;
+use std::{fmt, usize};
+
+#[derive(Copy, Clone)]
+pub struct Span {
+    pub len: usize,
+    pub line: usize,
+    pub col: usize
+}
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum TokenKind {
@@ -43,6 +50,7 @@ impl fmt::Display for TokenKind {
 pub struct Token {
     pub kind: TokenKind,
     pub lexeme: String,
+    pub span: Span
 }
 
 impl fmt::Display for Token {
