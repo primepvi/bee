@@ -1,59 +1,7 @@
 use regex::Regex;
-use std::fmt;
-
-#[derive(Copy, Clone)]
-pub enum TokenKind {
-    Eof,
-
-    Const,
-    Var,
-    Begin,
-    End,
-
-    Integer,
-    Float,
-    String,
-    Identifier,
-
-    Equal,
-    Colon,
-    SemiColon,
-}
-
-impl fmt::Display for TokenKind {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            TokenKind::Eof        => write!(f, "Eof"),
-            TokenKind::Const      => write!(f, "Const"),
-            TokenKind::Var        => write!(f, "Var"),
-            TokenKind::Begin      => write!(f, "Begin"),
-            TokenKind::End        => write!(f, "End"),
-            TokenKind::Integer    => write!(f, "Integer"),
-            TokenKind::Float      => write!(f, "Float"),
-            TokenKind::String     => write!(f, "String"),
-            TokenKind::Identifier => write!(f, "Identifier"),
-
-            TokenKind::Equal      => write!(f, "Equal"),
-            TokenKind::Colon      => write!(f, "Colon"),
-            TokenKind::SemiColon  => write!(f, "SemiColon"),
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct Token {
-    kind: TokenKind,
-    lexeme: String,
-}
-
-impl fmt::Display for Token {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:<12} '{}'", self.kind, self.lexeme)
-    }
-}
+use crate::ast::*;
 
 pub struct Lexer {
-    tokens: Vec<Token>,
     cursor: usize,
     source: &'static str,
 }
@@ -61,7 +9,6 @@ pub struct Lexer {
 impl Lexer {
     pub fn new(source: &'static str) -> Self {
         Self {
-            tokens: vec![],
             cursor: 0,
             source: source.trim(),
         }
@@ -91,6 +38,8 @@ impl Lexer {
             (TokenKind::SemiColon, Regex::new(r"^;").unwrap()),
         ];
 
+        let mut tokens: Vec<Token> = Vec::with_capacity(128);
+
         while self.cursor < self.source.len() {
             let slice = &self.source[self.cursor..];
 
@@ -113,7 +62,7 @@ impl Lexer {
                         lexeme,
                     };
 
-                    self.tokens.push(token.clone());
+                    tokens.push(token.clone());
                     self.cursor += token.lexeme.len();
 
                     matched = true;
@@ -127,10 +76,11 @@ impl Lexer {
             }
         }
 
-        self.tokens.push(Token {
+        tokens.push(Token {
             kind: TokenKind::Eof,
             lexeme: String::new(),
         });
-        self.tokens.clone()
+
+        tokens
     }
 }
