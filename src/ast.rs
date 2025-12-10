@@ -59,6 +59,7 @@ impl fmt::Display for Token {
     }
 }
 
+#[derive(Clone)]
 pub struct TypeDescriptor {
     pub identifier: Token,
     pub lifetime: Option<Token>,
@@ -80,7 +81,7 @@ impl fmt::Display for TypeDescriptor {
 }
 
 pub enum Expression {
-    VariableAssignment { left: Token, right: Box<Expression> },
+    VariableAssignment { left: Token, equal: Token, right: Box<Expression> },
     Literal { value: Token },
     Identifier { value: Token }
 }
@@ -89,7 +90,7 @@ impl Expression {
     pub fn print(&self, indent: usize) {
         let pad = " ".repeat(indent);
         match self {
-            Expression::VariableAssignment { left, right } => {
+            Expression::VariableAssignment { left, equal, right } => {
                 println!("{}Assignment: {}", pad, left.lexeme);
                 right.print(indent + 2);
             }
@@ -106,7 +107,7 @@ impl Expression {
 impl fmt::Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Expression::VariableAssignment { left, right } => {
+            Expression::VariableAssignment { left, equal, right } => {
                 write!(f, "(assign {} = {})", left, right)
             }
 

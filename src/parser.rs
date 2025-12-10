@@ -51,10 +51,10 @@ impl Parser {
 
                 Ok(stmt)
             }
-            _ => Err(self.err_fmt.format(current.span, format!(
-                "unexpected token found in statement parse: {}.",
-                current
-            ))),
+            _ => Err(self.err_fmt.format(
+                current.span,
+                format!("unexpected token found in statement parse: {}.", current),
+            )),
         }
     }
 
@@ -97,15 +97,17 @@ impl Parser {
                 None
             };
 
-            self.tokens
-                .next_if(|t| t.kind == TokenKind::SemiColon)
-                .ok_or_else(|| {
-                    let current = self.tokens.peek().unwrap();
-                    self.err_fmt.format(
-                        current.span,
-                        format!("expected ';', but received: {}.", current),
-                    )
-                })?;
+            if punc.kind == TokenKind::Equal {
+                self.tokens
+                    .next_if(|t| t.kind == TokenKind::SemiColon)
+                    .ok_or_else(|| {
+                        let current = self.tokens.peek().unwrap();
+                        self.err_fmt.format(
+                            current.span,
+                            format!("expected ';', but received: {}.", current),
+                        )
+                    })?;
+            }
 
             return Ok(Statement::DeclareVariable {
                 constant,
@@ -221,10 +223,7 @@ impl Parser {
             TokenKind::Identifier => self.parse_identifier(),
             _ => Err(self.err_fmt.format(
                 current.span,
-                format!(
-                    "unexpected token found in expression parse: {}.",
-                    current
-                ),
+                format!("unexpected token found in expression parse: {}.", current),
             )),
         }
     }
@@ -260,8 +259,8 @@ impl Parser {
 
         if self
             .tokens
-            .next_if(|t| t.kind == TokenKind::Equal)
-            .is_some()
+            .peek()
+            .is_some_and(|t| t.kind == TokenKind::Equal)
         {
             return self.parse_assignment_expr(identifier);
         }
@@ -270,10 +269,12 @@ impl Parser {
     }
 
     fn parse_assignment_expr(&mut self, identifier: Token) -> Result<Expression, String> {
+        let equal = self.tokens.next().unwrap();
         let expr = self.parse_expr()?;
 
         Ok(Expression::VariableAssignment {
             left: identifier,
+            equal,
             right: Box::new(expr),
         })
     }
