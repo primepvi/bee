@@ -1,26 +1,16 @@
 use core::fmt;
 use std::{collections::HashMap, iter::Peekable, vec::IntoIter};
 
+use inkwell::values::PointerValue;
+
 use crate::{ast::*, error::ErrorFormatter};
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum Type {
-    UInt8,
-    UInt16,
-    UInt32,
-    UInt64,
-
-    Int8,
-    Int16,
-    Int32,
-    Int64,
-
-    Float32,
-    Float64,
-
+    UInt8, UInt16, UInt32, UInt64,
+    Int8, Int16, Int32, Int64,
+    Float32, Float64,
     String,
-
-    SubType { name: String, size: usize },
 }
 
 impl Type {
@@ -30,15 +20,12 @@ impl Type {
             "int16" => Some(Type::Int16),
             "int32" => Some(Type::Int32),
             "int64" => Some(Type::Int64),
-
             "uint8" => Some(Type::UInt8),
             "uint16" => Some(Type::UInt16),
             "uint32" => Some(Type::UInt32),
             "uint64" => Some(Type::UInt64),
-
             "float32" => Some(Type::Float32),
             "float64" => Some(Type::Float64),
-
             "string" => Some(Type::String),
             _ => None,
         }
@@ -46,7 +33,7 @@ impl Type {
 }
 
 impl fmt::Display for Type {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Type::UInt8 => write!(f, "uint8"),
             Type::UInt16 => write!(f, "uint16"),
@@ -59,9 +46,53 @@ impl fmt::Display for Type {
             Type::Float32 => write!(f, "float32"),
             Type::Float64 => write!(f, "float64"),
             Type::String => write!(f, "string"),
-            Type::SubType { name, size } => write!(f, "{}", name),
         }
     }
+}
+
+#[derive(Clone)]
+pub enum TIRExpr<'ctx> {
+    Literal {
+        value: Token,
+        typing: Type,
+    },
+    Variable {
+        name: String,
+        typing: Type,
+        llvm_value: Option<PointerValue<'ctx>>,
+    },
+    Assign {
+        name: String,
+        value: Box<TIRExpr<'ctx>>,
+        typing: Type,
+        llvm_value: Option<PointerValue<'ctx>>,
+    },
+}
+
+impl<'ctx> TIRExpr<'ctx> {
+    pub fn get_typing(&self) -> Type {
+        match self {
+            TIRExpr::Literal { typing, .. } => *typing,
+            TIRExpr::Variable { typing, .. } => *typing,
+            TIRExpr::Assign { typing, .. } => *typing,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub enum TIRStmt<'ctx> {
+    Declare {
+        name: String,
+        constant: bool,
+        typing: Type,
+        value: Option<TIRExpr<'ctx>>,
+        llvm_value: Option<PointerValue<'ctx>>,
+    },
+    Expression(TIRExpr<'ctx>),
+    Block {
+        label: Option<String>,
+        statements: Vec<TIRStmt<'ctx>>,
+    },
 }
 
 #[derive(Clone)]
@@ -69,6 +100,11 @@ pub struct Symbol {
     constant: bool,
     identifier: Token,
     typing: Type,
+}
+
+#[derive(Clone)]
+pub struct TIRProgram<'ctx> {
+    pub statements: Vec<TIRStmt<'ctx>>,
 }
 
 pub struct SymbolTable {
@@ -87,13 +123,11 @@ impl SymbolTable {
     pub fn insert(&mut self, name: &str, symbol: Symbol) -> Result<(), String> {
         if self.symbols.contains_key(name) {
             return Err(format!(
-                "symbol '{name}' already has defined in this scope: {}",
+                "symbol '{name}' already defined in scope: {}",
                 self.label.clone().unwrap_or("unnamed".to_string())
             ));
         }
-
         self.symbols.insert(name.to_string(), symbol);
-
         Ok(())
     }
 
@@ -102,20 +136,22 @@ impl SymbolTable {
     }
 }
 
-pub struct SemanticAnalyzer {
+pub struct SemanticAnalyzer<'ctx> {
     program: Peekable<IntoIter<Statement>>,
-    err_fmt: ErrorFormatter,
+    pub err_fmt: ErrorFormatter,
     scopes: Vec<SymbolTable>,
+    tir: TIRProgram<'ctx>,
 }
 
-impl SemanticAnalyzer {
+impl<'ctx> SemanticAnalyzer<'ctx> {
     pub fn new(program: Vec<Statement>, source: &'static str) -> Self {
-        let scopes: Vec<SymbolTable> = vec![SymbolTable::new(Some("global".to_string()))];
+        let scopes = vec![SymbolTable::new(Some("global".to_string()))];
 
         Self {
             program: program.into_iter().peekable(),
             err_fmt: ErrorFormatter::new("semantic-analyzer", source, "main.bee"),
             scopes,
+            tir: TIRProgram { statements: Vec::new() },
         }
     }
 
@@ -128,9 +164,7 @@ impl SemanticAnalyzer {
     }
 
     fn current_scope_mut(&mut self) -> &mut SymbolTable {
-        self.scopes
-            .last_mut()
-            .expect("internal err: pop empty scope.")
+        self.scopes.last_mut().expect("internal err: pop empty scope.")
     }
 
     fn lookup(&self, name: &str) -> Option<Symbol> {
@@ -139,123 +173,118 @@ impl SemanticAnalyzer {
                 return Some(s);
             }
         }
-
         None
     }
 
-    pub fn analyze(&mut self) -> Result<(), String> {
+    pub fn analyze(&mut self) -> Result<TIRProgram<'ctx>, String> {
         while let Some(stmt) = self.program.next() {
-            self.analyze_stmt(&stmt)?;
+            let tir_stmt = self.analyze_stmt(&stmt)?;
+            self.tir.statements.push(tir_stmt);
         }
-
-        Ok(())
+        Ok(self.tir.clone())
     }
 
-    fn analyze_stmt(&mut self, stmt: &Statement) -> Result<(), String> {
+    fn analyze_stmt(&mut self, stmt: &Statement) -> Result<TIRStmt<'ctx>, String> {
         match stmt {
-            Statement::DeclareVariable {
-                constant,
-                identifier,
-                type_descriptor,
-                value,
-            } => {
-                let mut descriptor_typing: Option<Type> = None;
-                if let Some(d) = type_descriptor {
-                    let result = Type::from_descriptor(d.clone()).ok_or_else(|| {
+            Statement::DeclareVariable { constant, identifier, type_descriptor, value } => {
+                let descriptor_typing = if let Some(d) = type_descriptor {
+                    Some(Type::from_descriptor(d.clone()).ok_or_else(|| {
                         self.err_fmt.format(
                             d.identifier.span,
-                            format!("invalid type has provided: {}", d.identifier.lexeme),
+                            format!("invalid type provided: {}", d.identifier.lexeme),
                         )
-                    })?;
+                    })?)
+                } else { None };
 
-                    descriptor_typing = Some(result);
-                }
+                let expr = if let Some(e) = value {
+                    Some(self.analyze_expr(e)?)
+                } else { None };
 
-                let mut value_typing: Option<Type> = None;
-                if let Some(e) = value {
-                    let result = self.analyze_expr(e)?;
-                    value_typing = Some(result);
-                }
+                let value_typing = expr.as_ref().map(|e| e.get_typing());
 
-                if value_typing.is_none() && descriptor_typing.is_none() {
+                if descriptor_typing.is_none() && value_typing.is_none() {
                     return Err(self.err_fmt.format(
                         identifier.span,
-                        "unitialized variables must have type descriptors.".to_string(),
+                        "uninitialized variables must have type descriptors.".to_string(),
                     ));
                 }
 
-                if value_typing
-                    .clone()
-                    .is_some_and(|_| descriptor_typing.is_some())
-                    && value_typing.as_ref().unwrap() != descriptor_typing.as_ref().unwrap()
-                {
-                    return Err(self.err_fmt.format(
-                        type_descriptor.clone().unwrap().identifier.span,
-                        format!(
-                            "type descriptor is {}, but received an {} value.",
-                            descriptor_typing.unwrap(),
-                            value_typing.unwrap()
-                        ),
-                    ));
+                if let (Some(v_type), Some(d_type)) = (value_typing, descriptor_typing) {
+                    if v_type != d_type {
+                        return Err(self.err_fmt.format(
+                            type_descriptor.as_ref().unwrap().identifier.span,
+                            format!("type descriptor is {}, but received {}", d_type, v_type),
+                        ));
+                    }
                 }
+
+                let typing = descriptor_typing.or(value_typing).unwrap();
 
                 let scope = self.current_scope_mut();
-                let symbol = Symbol {
-                    constant: *constant,
-                    identifier: identifier.clone(),
-                    typing: descriptor_typing.or(value_typing).unwrap(),
-                };
-
-                scope
-                    .insert(&identifier.lexeme, symbol)
+                let symbol = Symbol { constant: *constant, identifier: identifier.clone(), typing };
+                scope.insert(&identifier.lexeme, symbol)
                     .map_err(|e| self.err_fmt.format(identifier.span, e))?;
 
-                Ok(())
+                Ok(TIRStmt::Declare {
+                    name: identifier.lexeme.clone(),
+                    constant: *constant,
+                    typing,
+                    value: expr,
+                    llvm_value: None,
+                })
             }
+
             Statement::Block { label, statements } => {
-                let label: Option<String> = label.as_ref().map(|t| t.lexeme.clone());
+                let label_opt = label.as_ref().map(|t| t.lexeme.clone());
+                self.open_scope(label_opt.clone());
 
-                self.open_scope(label);
+                let mut tir_stmts = Vec::with_capacity(statements.len());
                 for stmt in statements.iter() {
-                    self.analyze_stmt(stmt)?;
+                    tir_stmts.push(self.analyze_stmt(stmt)?);
                 }
-                self.close_scope();
 
-                Ok(())
+                self.close_scope();
+                Ok(TIRStmt::Block { label: label_opt, statements: tir_stmts })
             }
-            Statement::Expression { expr } => self.analyze_expr(expr).map(|_| ()),
+
+            Statement::Expression { expr } => {
+                let tir_expr = self.analyze_expr(expr)?;
+                Ok(TIRStmt::Expression(tir_expr))
+            }
         }
     }
 
-    fn analyze_expr(&mut self, expr: &Expression) -> Result<Type, String> {
+    fn analyze_expr(&mut self, expr: &Expression) -> Result<TIRExpr<'ctx>, String> {
         match expr {
             Expression::VariableAssignment { left, equal, right } => {
-                let symbol = self.lookup(&left.lexeme).ok_or_else(|| {
-                    self.err_fmt.format(
+                let symbol = self.lookup(&left.lexeme)
+                    .ok_or_else(|| self.err_fmt.format(
                         left.span,
-                        format!("cannot assign to undeclared variable: {}", left.lexeme),
-                    )
-                })?;
+                        format!("cannot assign to undeclared variable: {}", left.lexeme)
+                    ))?;
 
                 if symbol.constant {
-                    return Err(self
-                        .err_fmt
-                        .format(left.span, "cannot assign value to constant".to_string()));
+                    return Err(self.err_fmt.format(left.span, "cannot assign value to constant".to_string()));
                 }
 
-                let value_type = self.analyze_expr(right)?;
-                if value_type != symbol.clone().typing {
-                    return Err(self.err_fmt.format(
-                        equal.span,
-                        format!(
-                            "expected an {} value, but received an {} value.",
-                            symbol.typing, value_type
-                        ),
-                    ));
+                let value = self.analyze_expr(right)?;
+                let value_typing = value.get_typing();
+
+                if value_typing != symbol.typing {
+                    return Err(self.err_fmt.format(equal.span, format!(
+                        "expected an {} value, but received an {} value",
+                        symbol.typing, value_typing
+                    )));
                 }
 
-                Ok(value_type)
+                Ok(TIRExpr::Assign {
+                    name: symbol.identifier.lexeme,
+                    value: Box::new(value),
+                    typing: value_typing,
+                    llvm_value: None,
+                })
             }
+
             Expression::Literal { value } => {
                 let typing = match value.kind {
                     TokenKind::Integer => Type::Int64,
@@ -263,17 +292,19 @@ impl SemanticAnalyzer {
                     TokenKind::String => Type::String,
                     _ => unreachable!(),
                 };
-
-                Ok(typing)
+                Ok(TIRExpr::Literal { value: value.clone(), typing })
             }
 
-            Expression::Identifier { value } => self
-                .lookup(&value.lexeme)
-                .ok_or_else(|| {
-                    self.err_fmt
-                        .format(value.span, format!("undeclared variable: {}", value.lexeme))
+            Expression::Identifier { value } => {
+                let symbol = self.lookup(&value.lexeme)
+                    .ok_or_else(|| self.err_fmt.format(value.span, format!("undeclared variable: {}", value.lexeme)))?;
+
+                Ok(TIRExpr::Variable {
+                    name: symbol.identifier.lexeme,
+                    typing: symbol.typing,
+                    llvm_value: None,
                 })
-                .map(|s| s.typing.clone()),
+            }
         }
     }
 }

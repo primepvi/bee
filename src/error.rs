@@ -1,7 +1,6 @@
-use std::iter::repeat;
-
 use crate::ast::Span;
 
+#[derive(Clone)]
 pub struct ErrorFormatter {
     pub local: &'static str,
     pub source: &'static str,
