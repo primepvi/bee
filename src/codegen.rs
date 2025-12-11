@@ -155,8 +155,14 @@ impl<'ctx> Codegen<'ctx> {
                 }
 
                 match self.get_llvm_type(typing.clone()) {
-                    BasicTypeEnum::FloatType(float_type) => unsafe { Ok(float_type.const_float_from_string(&value.lexeme).into()) },
-                    BasicTypeEnum::IntType(int_type) => Ok(int_type.const_int_from_string(&value.lexeme, StringRadix::Alphanumeric).unwrap().into()),
+                    BasicTypeEnum::FloatType(float_type) => {
+                        let value: f64 = value.lexeme.parse().unwrap();
+                        Ok(float_type.const_float(value).into())
+                    },
+                    BasicTypeEnum::IntType(int_type) => {
+                        let value: u64 = value.lexeme.parse().unwrap();
+                        Ok(int_type.const_int(value, false).into())
+                    },
                     _ => unreachable!()
                 }
             },
