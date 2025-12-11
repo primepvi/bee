@@ -1,21 +1,30 @@
-use core::fmt;
-use std::{collections::HashMap, iter::Peekable, vec::IntoIter};
+use core::fmt::{self, Display};
+use std::{collections::HashMap, iter::Peekable, ops::Deref, vec::IntoIter};
 
-use inkwell::values::PointerValue;
+use inkwell::{types::BasicTypeEnum, values::PointerValue};
 
 use crate::{ast::*, error::ErrorFormatter};
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum Type {
-    UInt8, UInt16, UInt32, UInt64,
-    Int8, Int16, Int32, Int64,
-    Float32, Float64,
+    UInt8,
+    UInt16,
+    UInt32,
+    UInt64,
+    Int8,
+    Int16,
+    Int32,
+    Int64,
+    Float32,
+    Float64,
     String,
+
+    Static(Box<Type>),
 }
 
 impl Type {
     pub fn from_descriptor(descriptor: TypeDescriptor) -> Option<Self> {
-        match descriptor.identifier.lexeme.as_str() {
+        let typing = match descriptor.identifier.lexeme.as_str() {
             "int8" => Some(Type::Int8),
             "int16" => Some(Type::Int16),
             "int32" => Some(Type::Int32),
@@ -28,11 +37,41 @@ impl Type {
             "float64" => Some(Type::Float64),
             "string" => Some(Type::String),
             _ => None,
+        };
+
+        if let Some(t) = typing.clone()
+            && descriptor.lifetime.is_some()
+            && descriptor.lifetime.unwrap().lexeme == "static"
+        {
+            return Some(Type::Static(Box::new(t)));
         }
+
+        typing
     }
+
+    pub fn compare(&self, other: Type) -> bool {
+        let a = if let Type::Static(t) = self {
+            t
+        } else { self };
+
+        let b = if let Type::Static(t) = other {
+            *t
+        } else { other };
+
+        *a == b
+    }
+
+    pub fn without_static(&self) -> Type {
+        if let Type::Static(t) = self { *t.clone() } else { self.clone() }
+    }
+    
+    pub fn is_static(&self) -> bool {
+        if let Type::Static(_) = self { true } else { false }
+    }
+
 }
 
-impl fmt::Display for Type {
+impl Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Type::UInt8 => write!(f, "uint8"),
@@ -46,6 +85,7 @@ impl fmt::Display for Type {
             Type::Float32 => write!(f, "float32"),
             Type::Float64 => write!(f, "float64"),
             Type::String => write!(f, "string"),
+            Type::Static(t) => write!(f, "static {}", t),
         }
     }
 }
@@ -70,11 +110,11 @@ pub enum TIRExpr<'ctx> {
 }
 
 impl<'ctx> TIRExpr<'ctx> {
-    pub fn get_typing(&self) -> Type {
+    pub fn get_typing(&self) -> &Type {
         match self {
-            TIRExpr::Literal { typing, .. } => *typing,
-            TIRExpr::Variable { typing, .. } => *typing,
-            TIRExpr::Assign { typing, .. } => *typing,
+            TIRExpr::Literal { typing, .. } => typing,
+            TIRExpr::Variable { typing, .. } => typing,
+            TIRExpr::Assign { typing, .. } => typing,
         }
     }
 }
@@ -151,7 +191,9 @@ impl<'ctx> SemanticAnalyzer<'ctx> {
             program: program.into_iter().peekable(),
             err_fmt: ErrorFormatter::new("semantic-analyzer", source, filepath),
             scopes,
-            tir: TIRProgram { statements: Vec::new() },
+            tir: TIRProgram {
+                statements: Vec::new(),
+            },
         }
     }
 
@@ -164,7 +206,9 @@ impl<'ctx> SemanticAnalyzer<'ctx> {
     }
 
     fn current_scope_mut(&mut self) -> &mut SymbolTable {
-        self.scopes.last_mut().expect("internal err: pop empty scope.")
+        self.scopes
+            .last_mut()
+            .expect("internal err: pop empty scope.")
     }
 
     fn lookup(&self, name: &str) -> Option<Symbol> {
@@ -186,7 +230,12 @@ impl<'ctx> SemanticAnalyzer<'ctx> {
 
     fn analyze_stmt(&mut self, stmt: &Statement) -> Result<TIRStmt<'ctx>, String> {
         match stmt {
-            Statement::DeclareVariable { constant, identifier, type_descriptor, value } => {
+            Statement::DeclareVariable {
+                constant,
+                identifier,
+                type_descriptor,
+                value,
+            } => {
                 let descriptor_typing = if let Some(d) = type_descriptor {
                     Some(Type::from_descriptor(d.clone()).ok_or_else(|| {
                         self.err_fmt.format(
@@ -194,11 +243,15 @@ impl<'ctx> SemanticAnalyzer<'ctx> {
                             format!("invalid type provided: {}", d.identifier.lexeme),
                         )
                     })?)
-                } else { None };
+                } else {
+                    None
+                };
 
                 let expr = if let Some(e) = value {
                     Some(self.analyze_expr(e)?)
-                } else { None };
+                } else {
+                    None
+                };
 
                 let value_typing = expr.as_ref().map(|e| e.get_typing());
 
@@ -209,20 +262,25 @@ impl<'ctx> SemanticAnalyzer<'ctx> {
                     ));
                 }
 
-                if let (Some(v_type), Some(d_type)) = (value_typing, descriptor_typing) {
-                    if v_type != d_type {
-                        return Err(self.err_fmt.format(
-                            type_descriptor.as_ref().unwrap().identifier.span,
-                            format!("type descriptor is {}, but received {}", d_type, v_type),
-                        ));
-                    }
+                if let (Some(v_type), Some(d_type)) = (value_typing, descriptor_typing.clone())
+                    && !v_type.compare(d_type.clone())
+                {
+                    return Err(self.err_fmt.format(
+                        type_descriptor.as_ref().unwrap().identifier.span,
+                        format!("type descriptor is {}, but received {}", d_type, v_type),
+                    ));
                 }
 
-                let typing = descriptor_typing.or(value_typing).unwrap();
+                let typing = descriptor_typing.or(value_typing.map(|t| t.clone())).unwrap();
 
                 let scope = self.current_scope_mut();
-                let symbol = Symbol { constant: *constant, identifier: identifier.clone(), typing };
-                scope.insert(&identifier.lexeme, symbol)
+                let symbol = Symbol {
+                    constant: *constant,
+                    identifier: identifier.clone(),
+                    typing: typing.clone(),
+                };
+                scope
+                    .insert(&identifier.lexeme, symbol)
                     .map_err(|e| self.err_fmt.format(identifier.span, e))?;
 
                 Ok(TIRStmt::Declare {
@@ -244,7 +302,10 @@ impl<'ctx> SemanticAnalyzer<'ctx> {
                 }
 
                 self.close_scope();
-                Ok(TIRStmt::Block { label: label_opt, statements: tir_stmts })
+                Ok(TIRStmt::Block {
+                    label: label_opt,
+                    statements: tir_stmts,
+                })
             }
 
             Statement::Expression { expr } => {
@@ -257,24 +318,30 @@ impl<'ctx> SemanticAnalyzer<'ctx> {
     fn analyze_expr(&mut self, expr: &Expression) -> Result<TIRExpr<'ctx>, String> {
         match expr {
             Expression::VariableAssignment { left, equal, right } => {
-                let symbol = self.lookup(&left.lexeme)
-                    .ok_or_else(|| self.err_fmt.format(
+                let symbol = self.lookup(&left.lexeme).ok_or_else(|| {
+                    self.err_fmt.format(
                         left.span,
-                        format!("cannot assign to undeclared variable: {}", left.lexeme)
-                    ))?;
+                        format!("cannot assign to undeclared variable: {}", left.lexeme),
+                    )
+                })?;
 
                 if symbol.constant {
-                    return Err(self.err_fmt.format(left.span, "cannot assign value to constant".to_string()));
+                    return Err(self
+                        .err_fmt
+                        .format(left.span, "cannot assign value to constant".to_string()));
                 }
 
                 let value = self.analyze_expr(right)?;
-                let value_typing = value.get_typing();
+                let value_typing = value.get_typing().clone();
 
                 if value_typing != symbol.typing {
-                    return Err(self.err_fmt.format(equal.span, format!(
-                        "expected an {} value, but received an {} value",
-                        symbol.typing, value_typing
-                    )));
+                    return Err(self.err_fmt.format(
+                        equal.span,
+                        format!(
+                            "expected an {} value, but received an {} value",
+                            symbol.typing, value_typing
+                        ),
+                    ));
                 }
 
                 Ok(TIRExpr::Assign {
@@ -289,15 +356,20 @@ impl<'ctx> SemanticAnalyzer<'ctx> {
                 let typing = match value.kind {
                     TokenKind::Integer => Type::Int32,
                     TokenKind::Float => Type::Float32,
-                    TokenKind::String => Type::String,
+                    TokenKind::String => Type::Static(Box::new(Type::String)),
                     _ => unreachable!(),
                 };
-                Ok(TIRExpr::Literal { value: value.clone(), typing })
+                Ok(TIRExpr::Literal {
+                    value: value.clone(),
+                    typing,
+                })
             }
 
             Expression::Identifier { value } => {
-                let symbol = self.lookup(&value.lexeme)
-                    .ok_or_else(|| self.err_fmt.format(value.span, format!("undeclared variable: {}", value.lexeme)))?;
+                let symbol = self.lookup(&value.lexeme).ok_or_else(|| {
+                    self.err_fmt
+                        .format(value.span, format!("undeclared variable: {}", value.lexeme))
+                })?;
 
                 Ok(TIRExpr::Variable {
                     name: symbol.identifier.lexeme,

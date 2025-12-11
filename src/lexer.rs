@@ -48,6 +48,7 @@ impl Lexer {
             (TokenKind::Equal, Regex::new(r"^=").unwrap()),
             (TokenKind::Colon, Regex::new(r"^:").unwrap()),
             (TokenKind::SemiColon, Regex::new(r"^;").unwrap()),
+            (TokenKind::At, Regex::new(r"^@").unwrap())
         ];
 
         let mut tokens: Vec<Token> = Vec::with_capacity(128);

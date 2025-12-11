@@ -1,4 +1,4 @@
-use std::{fmt, usize};
+use std::fmt;
 
 #[derive(Copy, Clone)]
 pub struct Span {
@@ -24,6 +24,7 @@ pub enum TokenKind {
     Equal,
     Colon,
     SemiColon,
+    At,
 }
 
 impl fmt::Display for TokenKind {
@@ -42,6 +43,7 @@ impl fmt::Display for TokenKind {
             TokenKind::Equal => write!(f, "Equal"),
             TokenKind::Colon => write!(f, "Colon"),
             TokenKind::SemiColon => write!(f, "SemiColon"),
+            TokenKind::At => write!(f, "At"),
         }
     }
 }
@@ -90,7 +92,7 @@ impl Expression {
     pub fn print(&self, indent: usize) {
         let pad = " ".repeat(indent);
         match self {
-            Expression::VariableAssignment { left, equal, right } => {
+            Expression::VariableAssignment { left, equal: _, right } => {
                 println!("{}Assignment: {}", pad, left.lexeme);
                 right.print(indent + 2);
             }
@@ -107,7 +109,7 @@ impl Expression {
 impl fmt::Display for Expression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Expression::VariableAssignment { left, equal, right } => {
+            Expression::VariableAssignment { left, equal: _, right } => {
                 write!(f, "(assign {} = {})", left, right)
             }
 

@@ -117,23 +117,8 @@ impl Parser {
             });
         }
 
-        let type_identifier = self
-            .tokens
-            .next_if(|t| t.kind == TokenKind::Identifier)
-            .ok_or_else(|| {
-                let current = self.tokens.peek().unwrap();
-                self.err_fmt.format(
-                    current.span,
-                    format!("expected identifier, but received: {}.", current),
-                )
-            })?;
-
-        let type_descriptor = TypeDescriptor {
-            identifier: type_identifier,
-            lifetime: None,
-            comptime: false,
-        };
-
+        let type_descriptor = self.parse_type_anotation()?;
+        
         let punc = self
             .tokens
             .next_if(|t| t.kind == TokenKind::Equal || t.kind == TokenKind::SemiColon)
@@ -166,6 +151,28 @@ impl Parser {
             identifier,
             type_descriptor: Some(type_descriptor),
             value,
+        })
+    }
+
+    fn parse_type_anotation(&mut self) -> Result<TypeDescriptor, String> {
+        let mut lifetime: Option<Token> = None;
+        
+        if self.tokens.next_if(|t| t.kind == TokenKind::At).is_some() {
+            lifetime = Some(self.tokens.next_if(|t| t.kind == TokenKind::Identifier).ok_or_else(|| {
+                let current = self.tokens.peek().unwrap();
+                self.err_fmt.format(current.span, format!("expected Identifier, but received: {}", current))
+            })?);
+        }
+
+        let identifier = self.tokens.next_if(|t| t.kind == TokenKind::Identifier).ok_or_else(|| {
+                let current = self.tokens.peek().unwrap();
+                self.err_fmt.format(current.span, format!("expected Identifier, but received: {}", current))
+        })?;
+
+        Ok(TypeDescriptor {
+            identifier,
+            lifetime,
+            comptime: false
         })
     }
 
