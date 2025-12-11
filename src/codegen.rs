@@ -5,7 +5,13 @@ use crate::{
     semantic_analyzer::{TIRExpr, TIRStmt, Type},
 };
 use inkwell::{
-    builder::Builder, context::Context, execution_engine::ExecutionEngine, module::Module, types::{AnyType, AsTypeRef, BasicTypeEnum, StringRadix}, values::{BasicValueEnum, PointerValue}, AddressSpace, OptimizationLevel
+    AddressSpace, OptimizationLevel,
+    builder::Builder,
+    context::Context,
+    execution_engine::ExecutionEngine,
+    module::Module,
+    types::{AnyType, AsTypeRef, BasicTypeEnum, StringRadix},
+    values::{BasicValueEnum, PointerValue},
 };
 
 use crate::semantic_analyzer::TIRProgram;
@@ -125,29 +131,59 @@ impl<'ctx> Codegen<'ctx> {
                 self.close_scope();
 
                 Ok(())
-            },
+            }
         }
     }
 
     fn gen_expr(&mut self, expr: &TIRExpr<'ctx>) -> Result<BasicValueEnum<'ctx>, String> {
         match expr {
-            TIRExpr::Literal { value, typing } => {
-                match typing {
-                    Type::UInt8 | Type::Int8 => 
-                        Ok(self.context.i8_type().const_int_from_string(&value.lexeme, StringRadix::Alphanumeric).unwrap().into()),
-                    Type::UInt16 | Type::Int16 =>
-                        Ok(self.context.i16_type().const_int_from_string(&value.lexeme, StringRadix::Alphanumeric).unwrap().into()),
-                    Type::UInt32 | Type::Int32 =>
-                        Ok(self.context.i32_type().const_int_from_string(&value.lexeme, StringRadix::Alphanumeric).unwrap().into()),
-                    Type::UInt64 | Type::Int64 =>
-                        Ok(self.context.i64_type().const_int_from_string(&value.lexeme, StringRadix::Alphanumeric).unwrap().into()),
-                    Type::Float32 =>
-                        unsafe { Ok(self.context.f32_type().const_float_from_string(&value.lexeme).into()) },
-                    Type::Float64 =>
-                        unsafe { Ok(self.context.f64_type().const_float_from_string(&value.lexeme).into()) },
-                    _  =>
-                        unreachable!(),
+            TIRExpr::Literal { value, typing } => match typing {
+                Type::UInt8 | Type::Int8 => Ok(self
+                    .context
+                    .i8_type()
+                    .const_int_from_string(&value.lexeme, StringRadix::Alphanumeric)
+                    .unwrap()
+                    .into()),
+                Type::UInt16 | Type::Int16 => Ok(self
+                    .context
+                    .i16_type()
+                    .const_int_from_string(&value.lexeme, StringRadix::Alphanumeric)
+                    .unwrap()
+                    .into()),
+                Type::UInt32 | Type::Int32 => Ok(self
+                    .context
+                    .i32_type()
+                    .const_int_from_string(&value.lexeme, StringRadix::Alphanumeric)
+                    .unwrap()
+                    .into()),
+                Type::UInt64 | Type::Int64 => Ok(self
+                    .context
+                    .i64_type()
+                    .const_int_from_string(&value.lexeme, StringRadix::Alphanumeric)
+                    .unwrap()
+                    .into()),
+                Type::Float32 => unsafe {
+                    Ok(self
+                        .context
+                        .f32_type()
+                        .const_float_from_string(&value.lexeme)
+                        .into())
+                },
+                Type::Float64 => unsafe {
+                    Ok(self
+                        .context
+                        .f64_type()
+                        .const_float_from_string(&value.lexeme)
+                        .into())
+                },
+                Type::String => {
+                    let g = self
+                        .builder
+                        .build_global_string_ptr(&value.lexeme, "str")
+                        .unwrap();
+                    Ok(g.as_pointer_value().into())
                 }
+                _ => unreachable!(),
             },
             TIRExpr::Variable {
                 name,
@@ -156,9 +192,9 @@ impl<'ctx> Codegen<'ctx> {
             } => {
                 let ptr = self.lookup(name).unwrap();
                 let llvm_typing = self.get_llvm_type(*typing);
-                
+
                 Ok(self.builder.build_load(llvm_typing, ptr, name).unwrap())
-            },
+            }
             TIRExpr::Assign {
                 name,
                 value,
@@ -168,9 +204,9 @@ impl<'ctx> Codegen<'ctx> {
                 let val = self.gen_expr(value)?;
                 let ptr = self.lookup(name).unwrap();
 
-                self.builder.build_store(ptr, val);
+                _ = self.builder.build_store(ptr, val).unwrap();
                 Ok(val)
-            },
+            }
         }
     }
 }

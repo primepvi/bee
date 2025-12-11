@@ -5,16 +5,16 @@ pub struct Lexer {
     line: usize,
     col: usize,
     err_fmt: ErrorFormatter,
-    source: &'static str,
+    source: String,
 }
 
 impl Lexer {
-    pub fn new(source: &'static str) -> Self {
+    pub fn new(source: String, filepath: String) -> Self {
         Self {
             line: 1,
             col: 1,
-            source,
-            err_fmt: ErrorFormatter::new("lexer", source, "main.bee"),
+            source: source.clone(),
+            err_fmt: ErrorFormatter::new("lexer", source, filepath),
         }
     }
 

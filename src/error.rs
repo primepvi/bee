@@ -3,12 +3,12 @@ use crate::ast::Span;
 #[derive(Clone)]
 pub struct ErrorFormatter {
     pub local: &'static str,
-    pub source: &'static str,
-    pub filename: &'static str,
+    pub source: String,
+    pub filename: String,
 }
 
 impl ErrorFormatter {
-    pub fn new(local: &'static str, source: &'static str, filename: &'static str) -> Self {
+    pub fn new(local: &'static str, source: String, filename: String) -> Self {
         Self { local, source, filename }
     }
 

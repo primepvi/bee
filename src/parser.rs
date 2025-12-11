@@ -11,10 +11,10 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(tokens: Vec<Token>, source: &'static str) -> Self {
+    pub fn new(tokens: Vec<Token>, source: String, filepath: String) -> Self {
         Self {
             tokens: tokens.into_iter().peekable(),
-            err_fmt: ErrorFormatter::new("parser", source, "main.bee"),
+            err_fmt: ErrorFormatter::new("parser", source, filepath),
         }
     }
 

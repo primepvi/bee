@@ -144,12 +144,12 @@ pub struct SemanticAnalyzer<'ctx> {
 }
 
 impl<'ctx> SemanticAnalyzer<'ctx> {
-    pub fn new(program: Vec<Statement>, source: &'static str) -> Self {
+    pub fn new(program: Vec<Statement>, source: String, filepath: String) -> Self {
         let scopes = vec![SymbolTable::new(Some("global".to_string()))];
 
         Self {
             program: program.into_iter().peekable(),
-            err_fmt: ErrorFormatter::new("semantic-analyzer", source, "main.bee"),
+            err_fmt: ErrorFormatter::new("semantic-analyzer", source, filepath),
             scopes,
             tir: TIRProgram { statements: Vec::new() },
         }
@@ -287,7 +287,7 @@ impl<'ctx> SemanticAnalyzer<'ctx> {
 
             Expression::Literal { value } => {
                 let typing = match value.kind {
-                    TokenKind::Integer => Type::Int64,
+                    TokenKind::Integer => Type::Int32,
                     TokenKind::Float => Type::Float32,
                     TokenKind::String => Type::String,
                     _ => unreachable!(),
