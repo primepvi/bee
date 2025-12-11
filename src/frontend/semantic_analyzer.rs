@@ -1,7 +1,6 @@
 use crate::common::{
     ast::*,
     error_formatter::ErrorFormatter,
-    tir::*,
     visitors::{ExpressionVisitor, StatementVisitor},
 };
 
@@ -47,11 +46,10 @@ pub struct SemanticAnalyzer {
     program: Peekable<IntoIter<Statement>>,
     pub err_fmt: ErrorFormatter,
     scopes: Vec<SymbolTable>,
-    tir: TIRProgram,
 }
 
-type SemaStmtResult = Result<TIRStmt, String>;
-type SemaExprResult = Result<TIRExpr, String>;
+type SemaStmtResult = Result<Statement, String>;
+type SemaExprResult = Result<Expression, String>;
 
 impl StatementVisitor<SemaStmtResult> for SemanticAnalyzer {
     fn visit_stmt(&mut self, stmt: &Statement) -> SemaStmtResult {
@@ -76,12 +74,12 @@ impl StatementVisitor<SemaStmtResult> for SemanticAnalyzer {
             })?);
         }
 
-        let mut expr: Option<TIRExpr> = None;
+        let mut expr: Option<Expression> = None;
         if let Some(e) = &stmt.value {
             expr = Some(self.visit_expr(e)?);
         }
 
-        let value_typing = expr.as_ref().map(|e| e.get_typing());
+        let value_typing = expr.as_ref().map(|e| e.get_typing().unwrap());
         if descriptor_typing.is_none() && value_typing.is_none() {
             return Err(self.err_fmt.format(
                 stmt.identifier.span,
@@ -112,12 +110,13 @@ impl StatementVisitor<SemaStmtResult> for SemanticAnalyzer {
             .insert(&stmt.identifier.lexeme, symbol)
             .map_err(|e| self.err_fmt.format(stmt.identifier.span, e))?;
 
-        Ok(TIRStmt::Declare {
-            name: stmt.identifier.lexeme.clone(),
-            constant: stmt.constant,
-            typing,
+        let data = DeclareVariableStatementData {
+            typing: Some(typing),
             value: expr,
-        })
+            ..stmt.clone()
+        };
+        
+        Ok(Statement::DeclareVariable(data))
     }
 
     fn visit_block_stmt(&mut self, stmt: &BlockStatementData) -> SemaStmtResult {
@@ -130,15 +129,24 @@ impl StatementVisitor<SemaStmtResult> for SemanticAnalyzer {
         }
 
         self.close_scope();
-        Ok(TIRStmt::Block {
-            label: label_opt,
+
+        let data = BlockStatementData {
             statements: tir_stmts,
-        })
+            ..stmt.clone()
+        };
+        
+        Ok(Statement::Block(data))
     }
 
     fn visit_expression_stmt(&mut self, stmt: &ExpressionStatementData) -> SemaStmtResult {
-        let tir_expr = self.visit_expr(&stmt.expr)?;
-        Ok(TIRStmt::Expression(tir_expr))
+        let expr = self.visit_expr(&stmt.expr)?;
+        let data = ExpressionStatementData {
+            typing: expr.get_typing().cloned(),
+            expr,
+            ..stmt.clone()
+        };
+
+        Ok(Statement::Expression(data))
     }
 }
 
@@ -170,9 +178,9 @@ impl ExpressionVisitor<SemaExprResult> for SemanticAnalyzer {
         }
 
         let value = self.visit_expr(&expr.right)?;
-        let value_typing = value.get_typing().clone();
+        let value_typing = value.get_typing().unwrap();
 
-        if value_typing != symbol.typing {
+        if *value_typing != symbol.typing {
             return Err(self.err_fmt.format(
                 expr.equal.span,
                 format!(
@@ -181,12 +189,14 @@ impl ExpressionVisitor<SemaExprResult> for SemanticAnalyzer {
                 ),
             ));
         }
-
-        Ok(TIRExpr::Assign {
-            name: symbol.identifier.lexeme,
-            value: Box::new(value),
-            typing: value_typing,
-        })
+        
+        let data = VariableAssignmentExpressionData {
+            typing: Some(value_typing.clone()),
+            right: Box::new(value),
+            ..expr.clone()
+        };
+        
+        Ok(Expression::VariableAssignment(data))
     }
 
     fn visit_literal_expr(&mut self, expr: &LiteralExpressionData) -> SemaExprResult {
@@ -197,10 +207,12 @@ impl ExpressionVisitor<SemaExprResult> for SemanticAnalyzer {
             _ => unreachable!(),
         };
 
-        Ok(TIRExpr::Literal {
-            value: expr.value.lexeme.clone(),
-            typing,
-        })
+        let data = LiteralExpressionData {
+            typing: Some(typing),            
+            ..expr.clone()
+        };
+
+        Ok(Expression::Literal(data))
     }
 
     fn visit_identifier_expr(&mut self, expr: &IdentifierExpressionData) -> SemaExprResult {
@@ -209,10 +221,12 @@ impl ExpressionVisitor<SemaExprResult> for SemanticAnalyzer {
                 .format(expr.value.span, format!("undeclared variable: {}", expr.value.lexeme))
         })?;
 
-        Ok(TIRExpr::Variable {
-            name: symbol.identifier.lexeme,
-            typing: symbol.typing,
-        })
+        let data = IdentifierExpressionData {
+            typing: Some(symbol.typing),
+            ..expr.clone()
+        };
+
+        Ok(Expression::Identifier(data))
     }
 }
 
@@ -224,9 +238,6 @@ impl SemanticAnalyzer {
             program: program.into_iter().peekable(),
             err_fmt: ErrorFormatter::new("semantic-analyzer", source, filepath),
             scopes,
-            tir: TIRProgram {
-                statements: Vec::new(),
-            },
         }
     }
 
@@ -253,11 +264,14 @@ impl SemanticAnalyzer {
         None
     }
 
-    pub fn analyze(&mut self) -> Result<TIRProgram, String> {
+    pub fn analyze(&mut self) -> Result<Vec<Statement>, String> {
+        let mut program = Vec::new();
+        
         while let Some(stmt) = self.program.next() {
             let tir_stmt = self.visit_stmt(&stmt)?;
-            self.tir.statements.push(tir_stmt);
+            program.push(tir_stmt);
         }
-        Ok(self.tir.clone())
+        
+        Ok(program)
     }
 }

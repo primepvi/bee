@@ -1,0 +1,50 @@
+use crate::common::ast::TypeDescriptor;
+use std::fmt;
+
+
+#[derive(Clone)]
+pub enum TIRExpr {
+    Literal {
+        value: String,
+        typing: Type,
+    },
+    Variable {
+        name: String,
+        typing: Type,
+    },
+    Assign {
+        name: String,
+        value: Box<TIRExpr>,
+        typing: Type
+    },
+}
+
+impl<'ctx> TIRExpr {
+    pub fn get_typing(&self) -> &Type {
+        match self {
+            TIRExpr::Literal { typing, .. } => typing,
+            TIRExpr::Variable { typing, .. } => typing,
+            TIRExpr::Assign { typing, .. } => typing,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub enum TIRStmt {
+    Declare {
+        name: String,
+        constant: bool,
+        typing: Type,
+        value: Option<TIRExpr>,
+    },
+    Expression(TIRExpr),
+    Block {
+        label: Option<String>,
+        statements: Vec<TIRStmt>,
+    },
+}
+
+#[derive(Clone)]
+pub struct TIRProgram {
+    pub statements: Vec<TIRStmt>,
+}

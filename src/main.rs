@@ -63,14 +63,14 @@ fn main() {
     let ast = parser.parse().unwrap_or_else(|e| panic!("{e}"));
 
     let mut semantic_analyzer = SemanticAnalyzer::new(ast, source.to_string(), input_path.to_string());
-    let tir = semantic_analyzer.analyze().unwrap_or_else(|e| panic!("{e}"));
-
+    let typed_ast = semantic_analyzer.analyze().unwrap_or_else(|e| panic!("{e}"));
+    
     let context = Context::create();
     let mut codegen = Codegen::new(
         &context,
         "main_module",
         opt_level,
-        tir,
+        typed_ast,
     );
 
     codegen.generate().unwrap_or_else(|e| panic!("{e}"));

@@ -76,6 +76,7 @@ impl Parser {
         let var_token = self.tokens.next().unwrap();
         let constant = var_token.kind == TokenKind::Const;
         let mut type_descriptor: Option<TypeDescriptor> = None;
+        let typing: Option<Type> = None;
 
         let identifier = self.expect(TokenKind::Identifier)?;
         let punc = self.expect_any("(':' or '=' or ';')", |k| {
@@ -107,6 +108,7 @@ impl Parser {
                 type_descriptor,
                 value,
                 span,
+                typing
             };
 
             return Ok(Statement::DeclareVariable(data));
@@ -139,6 +141,7 @@ impl Parser {
             type_descriptor,
             value,
             span,
+            typing
         };
 
         Ok(Statement::DeclareVariable(data))
@@ -183,6 +186,7 @@ impl Parser {
             label,
             statements,
             span: begin.span,
+            typing: None
         };
 
         Ok(Statement::Block(data))
@@ -192,7 +196,7 @@ impl Parser {
         let expr = self.parse_expr()?;
         let span = expr.get_span();
 
-        let data = ExpressionStatementData { expr, span };
+        let data = ExpressionStatementData { expr, span, typing: None };
 
         self.expect(TokenKind::SemiColon)?;
 
@@ -218,7 +222,7 @@ impl Parser {
         })?;
 
         let span = value.span;
-        let data = LiteralExpressionData { value, span };
+        let data = LiteralExpressionData { value, span, typing: None };
 
         Ok(Expression::Literal(data))
     }
@@ -238,6 +242,7 @@ impl Parser {
         let data = IdentifierExpressionData {
             value: identifier,
             span,
+            typing: None
         };
 
         Ok(Expression::Identifier(data))
@@ -257,7 +262,8 @@ impl Parser {
             left: identifier,
             equal,
             right: Box::new(expr),
-            span
+            span,
+            typing: None
         };
 
         Ok(Expression::VariableAssignment(data))
