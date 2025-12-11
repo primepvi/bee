@@ -1,4 +1,4 @@
-use crate::{ast::*, error::ErrorFormatter};
+use crate::common::{ast::*, error_formatter::ErrorFormatter};
 use regex::Regex;
 
 pub struct Lexer {

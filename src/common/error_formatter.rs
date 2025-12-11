@@ -1,4 +1,4 @@
-use crate::ast::Span;
+use crate::common::ast::Span;
 
 #[derive(Clone)]
 pub struct ErrorFormatter {

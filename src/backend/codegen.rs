@@ -1,21 +1,17 @@
 use std::collections::HashMap;
 
-use crate::{
-    ast::Statement,
-    semantic_analyzer::{TIRExpr, TIRStmt, Type},
-};
 use inkwell::{
-    builder::Builder, context::Context, execution_engine::ExecutionEngine, module::{Linkage, Module}, types::{AnyType, AsTypeRef, BasicTypeEnum, StringRadix}, values::{AnyValue, BasicValueEnum, PointerValue}, AddressSpace, OptimizationLevel
+    builder::Builder, context::Context, execution_engine::ExecutionEngine, module::{Linkage, Module}, types::BasicTypeEnum, values::{BasicValueEnum, PointerValue}, AddressSpace, OptimizationLevel
 };
 
-use crate::semantic_analyzer::TIRProgram;
+use crate::common::{tir::*};
 
 pub struct Codegen<'ctx> {
     context: &'ctx Context,
     pub module: Module<'ctx>,
     pub builder: Builder<'ctx>,
     pub execution_engine: ExecutionEngine<'ctx>,
-    program: TIRProgram<'ctx>,
+    program: TIRProgram,
     scopes: Vec<HashMap<String, PointerValue<'ctx>>>,
 }
 
@@ -24,7 +20,7 @@ impl<'ctx> Codegen<'ctx> {
         context: &'ctx Context,
         module_name: &str,
         opt_level: OptimizationLevel,
-        program: TIRProgram<'ctx>,
+        program: TIRProgram,
     ) -> Self {
         let module = context.create_module(module_name);
         let execution_engine = module.create_jit_execution_engine(opt_level).unwrap();
@@ -95,14 +91,13 @@ impl<'ctx> Codegen<'ctx> {
         }
     }
 
-    fn gen_stmt(&mut self, stmt: &TIRStmt<'ctx>) -> Result<(), String> {
+    fn gen_stmt(&mut self, stmt: &TIRStmt) -> Result<(), String> {
         match stmt {
             TIRStmt::Declare {
                 name,
-                constant,
+                constant: _,
                 typing,
                 value,
-                llvm_value,
             } => {
                 if typing.is_static() {
                     let llvm_typing = self.get_llvm_type(typing.clone());
@@ -134,7 +129,7 @@ impl<'ctx> Codegen<'ctx> {
                 }
             }
             TIRStmt::Expression(expr) => self.gen_expr(expr).map(|_| {}),
-            TIRStmt::Block { label, statements } => {
+            TIRStmt::Block { label: _, statements } => {
                 self.open_scope();
                 for stmt in statements {
                     self.gen_stmt(stmt)?;
@@ -146,21 +141,21 @@ impl<'ctx> Codegen<'ctx> {
         }
     }
 
-    fn gen_expr(&mut self, expr: &TIRExpr<'ctx>) -> Result<BasicValueEnum<'ctx>, String> {
+    fn gen_expr(&mut self, expr: &TIRExpr) -> Result<BasicValueEnum<'ctx>, String> {
         match expr {
             TIRExpr::Literal { value, typing } => {
                 if let Type::String = typing.without_static() {
-                    let g = self.builder.build_global_string_ptr(&value.lexeme, "str").unwrap();
+                    let g = self.builder.build_global_string_ptr(&value, "str").unwrap();
                     return Ok(g.as_pointer_value().into());
                 }
 
                 match self.get_llvm_type(typing.clone()) {
                     BasicTypeEnum::FloatType(float_type) => {
-                        let value: f64 = value.lexeme.parse().unwrap();
+                        let value: f64 = value.parse().unwrap();
                         Ok(float_type.const_float(value).into())
                     },
                     BasicTypeEnum::IntType(int_type) => {
-                        let value: u64 = value.lexeme.parse().unwrap();
+                        let value: u64 = value.parse().unwrap();
                         Ok(int_type.const_int(value, false).into())
                     },
                     _ => unreachable!()
@@ -169,7 +164,6 @@ impl<'ctx> Codegen<'ctx> {
             TIRExpr::Variable {
                 name,
                 typing,
-                llvm_value,
             } => {
                 let ptr = self.lookup(name).unwrap();
                 let llvm_typing = self.get_llvm_type(typing.clone());
@@ -179,8 +173,7 @@ impl<'ctx> Codegen<'ctx> {
             TIRExpr::Assign {
                 name,
                 value,
-                typing,
-                llvm_value,
+                ..
             } => {
                 let val = self.gen_expr(value)?;
                 let ptr = self.lookup(name).unwrap();

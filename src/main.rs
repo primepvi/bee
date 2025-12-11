@@ -2,20 +2,15 @@ use clap::{Arg, Command};
 use std::fs;
 use std::path::Path;
 
-mod ast;
-mod error;
-mod lexer;
-mod parser;
-mod semantic_analyzer;
-mod codegen;
+mod frontend;
+mod backend;
+mod common;
 
 use inkwell::context::Context;
 use inkwell::OptimizationLevel;
 
-use lexer::*;
-use parser::*;
-use semantic_analyzer::*;
-use codegen::*;
+use frontend::{lexer::Lexer, parser::Parser, semantic_analyzer::SemanticAnalyzer};
+use backend::codegen::Codegen;
 
 fn main() {
     let matches = Command::new("bee")
