@@ -60,7 +60,6 @@ impl Parser {
 
     fn parse_declare_var_statement(&mut self) -> Result<Statement, String> {
         let var_token = self.tokens.next().unwrap();
-
         let constant = var_token.kind == TokenKind::Const;
 
         let identifier = self
@@ -136,7 +135,8 @@ impl Parser {
             None
         };
 
-        self.tokens
+        if punc.kind == TokenKind::Equal {
+            self.tokens
             .next_if(|t| t.kind == TokenKind::SemiColon)
             .ok_or_else(|| {
                 let current = self.tokens.peek().unwrap();
@@ -145,6 +145,7 @@ impl Parser {
                     format!("expected ';', but received: {}", current),
                 )
             })?;
+        }
 
         Ok(Statement::DeclareVariable {
             constant,

@@ -10,6 +10,7 @@ target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:
 
 define i32 @main() {
 entry:
+  %fvalue = alloca float, align 4
   %year = alloca i32, align 4
   store i32 93389, ptr %year, align 4
   %age = alloca i32, align 4
@@ -18,5 +19,6 @@ entry:
   %age1 = load i32, ptr %age, align 4
   store i32 %age1, ptr %other_age, align 4
   store i32 44, ptr %age, align 4
+  store float -1.550000e+01, ptr %fvalue, align 4
   ret i32 0
 }

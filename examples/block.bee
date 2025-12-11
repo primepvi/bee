@@ -1,5 +1,6 @@
 const message = "Hello, World";
 const response: @static string = "Hello, Bee";
+var fvalue: float32;
 
 begin :a
   var age: @static int32 = 18;
@@ -9,5 +10,6 @@ begin :a
     var age: int32 = 20;
     var other_age = age;
     age = 18;
+    fvalue = -15.5;
   end 
-end           
+end

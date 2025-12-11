@@ -9,18 +9,20 @@ More examples can be found on [examples](./examples/) folder
 
 ```typescript
 const message = "Hello, World";
-const response: string = "Hello, Bee";
+const response: @static string = "Hello, Bee";
+var fvalue: float32;
 
-begin: a;
-  var age = 18;
+begin :a
+  var age: @static int32 = 18;
   var year: int32 = 2025;
-
-  begin;
+  
+  begin
     var age: int32 = 20;
     var other_age = age;
     age = 18;
-  end;
-end;
+    fvalue = -15.5;
+  end 
+end
 ```
 
 ## **Build**
