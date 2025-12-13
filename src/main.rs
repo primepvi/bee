@@ -3,14 +3,14 @@ use std::fs;
 use std::path::Path;
 
 mod frontend;
-mod backend;
+//mod backend;
 mod common;
 
 use inkwell::context::Context;
 use inkwell::OptimizationLevel;
 
 use frontend::{lexer::Lexer, parser::Parser, semantic_analyzer::SemanticAnalyzer};
-use backend::codegen::Codegen;
+//use backend::codegen::Codegen;
 
 fn main() {
     let matches = Command::new("bee")
@@ -64,8 +64,10 @@ fn main() {
 
     let mut semantic_analyzer = SemanticAnalyzer::new(ast, source.to_string(), input_path.to_string());
     let typed_ast = semantic_analyzer.analyze().unwrap_or_else(|e| panic!("{e}"));
+
+    dbg!(typed_ast);
     
-    let context = Context::create();
+  /*  let context = Context::create();
     let mut codegen = Codegen::new(
         &context,
         "main_module",
@@ -94,4 +96,6 @@ fn main() {
            
         println!("Program returned: {}", ret);
     }
+
+*/
 }

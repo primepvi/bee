@@ -58,13 +58,11 @@ impl Parser {
 
     fn parse_statement(&mut self) -> Result<Statement, String> {
         let current = self.tokens.peek().unwrap();
-
+    
         match current.kind {
             TokenKind::Const | TokenKind::Var => self.parse_declare_var_statement(),
             TokenKind::Begin => self.parse_block_statement(),
-            TokenKind::Identifier | TokenKind::Integer | TokenKind::Float | TokenKind::String => {
-                self.parse_expr_stmt()
-            }
+            TokenKind::At | TokenKind::Identifier | TokenKind::Star => self.parse_expr_stmt(),
             _ => Err(self.err_fmt.format(
                 current.span,
                 format!("unexpected token found in statement parse: {}.", current),
@@ -108,7 +106,7 @@ impl Parser {
                 type_descriptor,
                 value,
                 span,
-                typing
+                typing,
             };
 
             return Ok(Statement::DeclareVariable(data));
@@ -141,7 +139,7 @@ impl Parser {
             type_descriptor,
             value,
             span,
-            typing
+            typing,
         };
 
         Ok(Statement::DeclareVariable(data))
@@ -149,17 +147,56 @@ impl Parser {
 
     fn parse_type_anotation(&mut self) -> Result<TypeDescriptor, String> {
         let mut lifetime: Option<Token> = None;
+        let mut ptr: Option<Pointer> = None;
 
         if self.expect(TokenKind::At).is_ok() {
             lifetime = Some(self.expect(TokenKind::Identifier)?);
         }
 
+        if self.expect(TokenKind::Star).is_ok() {
+            // thin pointer
+            let ptr_descriptor = PointerDescriptor {
+                nullable: self.expect(TokenKind::Question).is_ok(),
+                capacity: None,
+                mutable: self.expect(TokenKind::Var).is_ok(),
+            };
+
+            ptr = Some(Pointer::Thin(ptr_descriptor));
+        } else if self.expect(TokenKind::OpenBrace).is_ok() {
+            // fat pointer or array
+            let mut ptr_descriptor = PointerDescriptor {
+                nullable: false,
+                capacity: None,
+                mutable: false,
+            };
+
+            if self.expect(TokenKind::Star).is_ok() {
+                // fat pointer
+                ptr_descriptor.nullable = self.expect(TokenKind::Question).is_ok();
+                self.expect(TokenKind::CloseBrace)?;
+                ptr_descriptor.mutable = self.expect(TokenKind::Var).is_ok();
+                ptr = Some(Pointer::Fat(ptr_descriptor));
+            } else {
+                // array
+                if let Ok(cap_token) = self.expect(TokenKind::Integer) {
+                    ptr_descriptor.capacity = Some(cap_token);
+                }
+
+                self.expect(TokenKind::CloseBrace)?;
+                ptr_descriptor.mutable = self.expect(TokenKind::Var).is_ok();
+                ptr = Some(Pointer::Array(ptr_descriptor));
+            }
+        }
+
         let identifier = self.expect(TokenKind::Identifier)?;
+        let optional = self.expect(TokenKind::Question).is_ok();
 
         Ok(TypeDescriptor {
             identifier,
             lifetime,
             comptime: false,
+            optional,
+            pointer: ptr,
         })
     }
 
@@ -186,7 +223,7 @@ impl Parser {
             label,
             statements,
             span: begin.span,
-            typing: None
+            typing: None,
         };
 
         Ok(Statement::Block(data))
@@ -196,7 +233,11 @@ impl Parser {
         let expr = self.parse_expr()?;
         let span = expr.get_span();
 
-        let data = ExpressionStatementData { expr, span, typing: None };
+        let data = ExpressionStatementData {
+            expr,
+            span,
+            typing: None,
+        };
 
         self.expect(TokenKind::SemiColon)?;
 
@@ -207,7 +248,17 @@ impl Parser {
         let current = self.tokens.peek().unwrap();
 
         match current.kind {
-            TokenKind::Integer | TokenKind::Float | TokenKind::String => self.parse_literal(),
+            TokenKind::At => self.parse_builtin_call_expr(),
+            TokenKind::Star => self.parse_deref_expr(),
+            TokenKind::Ampersand => self.parse_ref_expr(),
+            TokenKind::OpenBrace => self.parse_array_expr(),
+            TokenKind::Integer
+            | TokenKind::Float
+            | TokenKind::String
+            | TokenKind::Undefined
+            | TokenKind::Null
+            | TokenKind::True
+            | TokenKind::False => self.parse_literal(),
             TokenKind::Identifier => self.parse_identifier(),
             _ => Err(self.err_fmt.format(
                 current.span,
@@ -216,13 +267,118 @@ impl Parser {
         }
     }
 
+    fn parse_builtin_call_expr(&mut self) -> Result<Expression, String> {
+        self.expect(TokenKind::At)?;
+
+        let callee = self.expect(TokenKind::Identifier)?;
+        let mut arguments: Vec<Expression> = Vec::new();
+
+        self.expect(TokenKind::OpenParen)?;
+        while !matches!(self.get_current_token().kind, TokenKind::Eof | TokenKind::CloseParen) {
+            arguments.push(self.parse_expr()?);
+            
+            if self.expect(TokenKind::Comma).is_err() {
+                break;
+            }
+        }
+        self.expect(TokenKind::CloseParen)?;
+
+        let data = BuiltinCallExpressionData {
+            callee,
+            arguments,
+            typing: None
+        };
+
+        Ok(Expression::BuiltinCall(data))
+    }
+
+    fn parse_deref_expr(&mut self) -> Result<Expression, String> {
+        self.expect(TokenKind::Star)?;
+        
+        let identifier = self.parse_expr()?;
+        let span = identifier.get_span();
+        
+        let data = DereferenceExpressionData {
+            identifier: Box::new(identifier),
+            span,
+            typing: None
+        };
+
+        let expr = Expression::Dereference(data);
+
+        if self.get_current_token().kind == TokenKind::Equal {
+            return self.parse_assignment_expr(expr);
+        }
+
+        Ok(expr)
+    }
+
+    fn parse_ref_expr(&mut self) -> Result<Expression, String> {
+        self.expect(TokenKind::Ampersand)?;
+
+        let mutable = self.expect(TokenKind::Var).is_ok();
+        
+        let identifier = self.parse_expr()?;
+        let span = identifier.get_span();
+        
+        let data = ReferenceExpressionData {
+            identifier: Box::new(identifier),
+            mutable,
+            span,
+            typing: None
+        };
+
+        Ok(Expression::Reference(data))
+    }
+
+    fn parse_array_expr(&mut self) -> Result<Expression, String> {
+        let open = self.expect(TokenKind::OpenBrace)?;
+        let mut values: Vec<Expression> = Vec::new();
+        
+        while !matches!(self.get_current_token().kind, TokenKind::Eof | TokenKind::CloseBrace) {
+            values.push(self.parse_expr()?);
+            
+            if self.expect(TokenKind::Comma).is_err() {
+                break;
+            }
+        }
+
+        let close = self.expect(TokenKind::CloseBrace)?;
+        let span = Span {
+            len: close.span.col - open.span.col + 1,
+            line: close.span.line,
+            col: open.span.col
+        };
+        
+        let data = ArrayLiteralExpressionData {
+            values,
+            span,
+            typing: None
+        };
+
+        Ok(Expression::ArrayLiteral(data))
+    }
+
     fn parse_literal(&mut self) -> Result<Expression, String> {
         let value = self.expect_any("literal", |k| {
-            matches!(k, TokenKind::Integer | TokenKind::Float | TokenKind::String)
+            matches!(
+                k,
+                TokenKind::Integer
+                    | TokenKind::Float
+                    | TokenKind::String
+                    | TokenKind::Null
+                    | TokenKind::Undefined
+                    | TokenKind::True
+                    | TokenKind::False
+            )
         })?;
 
         let span = value.span;
-        let data = LiteralExpressionData { value, span, typing: None };
+        let data = LiteralExpressionData {
+            value,
+            span,
+            typing: None,
+        };
 
         Ok(Expression::Literal(data))
     }
@@ -230,42 +386,71 @@ impl Parser {
     fn parse_identifier(&mut self) -> Result<Expression, String> {
         let identifier = self.expect(TokenKind::Identifier)?;
 
-        if self
-            .tokens
-            .peek()
-            .is_some_and(|t| t.kind == TokenKind::Equal)
-        {
-            return self.parse_assignment_expr(identifier);
-        }
-
         let span = identifier.span;
         let data = IdentifierExpressionData {
             value: identifier,
             span,
-            typing: None
+            typing: None,
         };
 
-        Ok(Expression::Identifier(data))
+        let expr = Expression::Identifier(data);
+
+        if self.get_current_token().kind == TokenKind::Equal {
+            return self.parse_assignment_expr(expr);
+        }
+
+        if self.get_current_token().kind == TokenKind::OpenBrace {
+            return self.parse_array_access_expr(expr);
+        }
+
+        Ok(expr)
     }
 
-    fn parse_assignment_expr(&mut self, identifier: Token) -> Result<Expression, String> {
+    fn parse_assignment_expr(&mut self, identifier: Expression) -> Result<Expression, String> {
         let equal = self.tokens.next().unwrap();
         let expr = self.parse_expr()?;
 
         let span = Span {
-            len: expr.get_span().col - identifier.span.col + 1,
+            len: expr.get_span().col - identifier.get_span().col + 1,
             line: equal.span.line,
-            col: identifier.span.col,
+            col: identifier.get_span().col,
         };
 
         let data = VariableAssignmentExpressionData {
-            left: identifier,
+            left: Box::new(identifier),
             equal,
             right: Box::new(expr),
+            span,
+            typing: None,
+        };
+
+        Ok(Expression::VariableAssignment(data))
+    }
+
+    fn parse_array_access_expr(&mut self, left: Expression) -> Result<Expression, String> {
+        let open = self.expect(TokenKind::OpenBrace)?;
+        let index = self.parse_expr()?;
+        let close = self.expect(TokenKind::CloseBrace)?;
+
+        let span = Span {
+            len: close.span.col - open.span.col + 1,
+            line: close.span.line,
+            col: open.span.col,
+        };
+
+        let data = ArrayAccessExpressionData {
+            left: Box::new(left),
+            index: Box::new(index),
             span,
             typing: None
         };
 
-        Ok(Expression::VariableAssignment(data))
+        let expr = Expression::ArrayAccess(data);
+
+        if self.get_current_token().kind == TokenKind::Equal {
+            return self.parse_assignment_expr(expr);
+        }
+
+        Ok(expr)
     }
 }

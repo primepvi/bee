@@ -66,7 +66,7 @@ impl StatementVisitor<SemaStmtResult> for SemanticAnalyzer {
     ) -> SemaStmtResult {
         let mut descriptor_typing: Option<Type> = None;
         if let Some(d) = &stmt.type_descriptor {
-            descriptor_typing = Some(Type::from_descriptor(d.clone()).ok_or_else(|| {
+            descriptor_typing = Some(Type::from_type_descriptor(d).ok_or_else(|| {
                 self.err_fmt.format(
                     d.identifier.span,
                     format!("invalid type provided: {}", d.identifier.lexeme),
@@ -88,17 +88,15 @@ impl StatementVisitor<SemaStmtResult> for SemanticAnalyzer {
         }
 
         if let (Some(v_type), Some(d_type)) = (value_typing, descriptor_typing.clone())
-            && !v_type.compare(&d_type)
+            && !v_type.is_compatible_with(&d_type)
         {
             return Err(self.err_fmt.format(
                 stmt.type_descriptor.as_ref().unwrap().identifier.span,
-                format!("type descriptor is {}, but received {}", d_type, v_type),
+                format!("type {} is not assignable to type {}", v_type, d_type),
             ));
         }
 
-        let typing = descriptor_typing
-            .or(value_typing.cloned())
-            .unwrap();
+        let typing = descriptor_typing.or(value_typing.cloned()).unwrap();
 
         let scope = self.current_scope_mut();
         let symbol = Symbol {
@@ -106,6 +104,7 @@ impl StatementVisitor<SemaStmtResult> for SemanticAnalyzer {
             identifier: stmt.identifier.clone(),
             typing: typing.clone(),
         };
+
         scope
             .insert(&stmt.identifier.lexeme, symbol)
             .map_err(|e| self.err_fmt.format(stmt.identifier.span, e))?;
@@ -115,7 +114,7 @@ impl StatementVisitor<SemaStmtResult> for SemanticAnalyzer {
             value: expr,
             ..stmt.clone()
         };
-        
+
         Ok(Statement::DeclareVariable(data))
     }
 
@@ -134,7 +133,7 @@ impl StatementVisitor<SemaStmtResult> for SemanticAnalyzer {
             statements: tir_stmts,
             ..stmt.clone()
         };
-        
+
         Ok(Statement::Block(data))
     }
 
@@ -156,6 +155,11 @@ impl ExpressionVisitor<SemaExprResult> for SemanticAnalyzer {
             Expression::VariableAssignment(d) => self.visit_variable_assignment_expr(d),
             Expression::Literal(d) => self.visit_literal_expr(d),
             Expression::Identifier(d) => self.visit_identifier_expr(d),
+            Expression::ArrayLiteral(d) => self.visit_array_literal_expr(d),
+            Expression::ArrayAccess(d) => self.visit_array_access_expr(d),
+            Expression::BuiltinCall(d) => self.visit_builtin_call_expr(d),
+            Expression::Dereference(d) => self.visit_deref_expr(d),
+            Expression::Reference(d) => self.visit_ref_expr(d),
         }
     }
 
@@ -163,16 +167,21 @@ impl ExpressionVisitor<SemaExprResult> for SemanticAnalyzer {
         &mut self,
         expr: &VariableAssignmentExpressionData,
     ) -> SemaExprResult {
-        let symbol = self.lookup(&expr.left.lexeme).ok_or_else(|| {
+        let identifier = self.resolve_identifier(&expr.left);
+
+        let symbol = self.lookup(&identifier.lexeme).ok_or_else(|| {
             self.err_fmt.format(
-                expr.left.span,
-                format!("cannot assign to undeclared variable: {}", expr.left.lexeme),
+                identifier.span,
+                format!(
+                    "cannot assign to undeclared variable: {}",
+                    identifier.lexeme
+                ),
             )
         })?;
 
         if symbol.constant {
             return Err(self.err_fmt.format(
-                expr.left.span,
+                identifier.span,
                 "cannot assign value to constant".to_string(),
             ));
         }
@@ -180,35 +189,28 @@ impl ExpressionVisitor<SemaExprResult> for SemanticAnalyzer {
         let value = self.visit_expr(&expr.right)?;
         let value_typing = value.get_typing().unwrap();
 
-        if *value_typing != symbol.typing {
+        if !value_typing.is_compatible_with(&symbol.typing) {
             return Err(self.err_fmt.format(
                 expr.equal.span,
                 format!(
-                    "expected an {} value, but received an {} value",
-                    symbol.typing, value_typing
+                    "type {} is not assignable to type {}.",
+                    value_typing, symbol.typing
                 ),
             ));
         }
-        
+
         let data = VariableAssignmentExpressionData {
             typing: Some(value_typing.clone()),
             right: Box::new(value),
             ..expr.clone()
         };
-        
+
         Ok(Expression::VariableAssignment(data))
     }
 
     fn visit_literal_expr(&mut self, expr: &LiteralExpressionData) -> SemaExprResult {
-        let typing = match expr.value.kind {
-            TokenKind::Integer => Type::Int32,
-            TokenKind::Float => Type::Float32,
-            TokenKind::String => Type::Static(Box::new(Type::String)),
-            _ => unreachable!(),
-        };
-
         let data = LiteralExpressionData {
-            typing: Some(typing),            
+            typing: Type::from_literal_expr(expr),
             ..expr.clone()
         };
 
@@ -217,8 +219,10 @@ impl ExpressionVisitor<SemaExprResult> for SemanticAnalyzer {
 
     fn visit_identifier_expr(&mut self, expr: &IdentifierExpressionData) -> SemaExprResult {
         let symbol = self.lookup(&expr.value.lexeme).ok_or_else(|| {
-            self.err_fmt
-                .format(expr.value.span, format!("undeclared variable: {}", expr.value.lexeme))
+            self.err_fmt.format(
+                expr.value.span,
+                format!("undeclared variable: {}", expr.value.lexeme),
+            )
         })?;
 
         let data = IdentifierExpressionData {
@@ -227,6 +231,121 @@ impl ExpressionVisitor<SemaExprResult> for SemanticAnalyzer {
         };
 
         Ok(Expression::Identifier(data))
+    }
+
+    fn visit_array_literal_expr(&mut self, expr: &ArrayLiteralExpressionData) -> SemaExprResult {
+        let mut expected_typing: Option<Type> = None;
+        let mut values: Vec<Expression> = Vec::new();
+
+        for expr in &expr.values {
+            let current_expr = self.visit_expr(&expr)?;
+            let current_typing = current_expr.get_typing().unwrap();
+
+            if !current_typing.is_undefined() || !current_typing.is_null() {
+                expected_typing = Some(current_typing.clone());
+            }
+
+            if expected_typing
+                .clone()
+                .is_some_and(|et| !current_typing.is_compatible_with(&et))
+            {
+                return Err(self.err_fmt.format(current_expr.get_span(), format!(
+                    "the type of this array has been inferred as {}, and type {} is not assignable to that.",
+                    expected_typing.unwrap(), current_typing
+                )));
+            }
+
+            values.push(current_expr);
+        }
+
+        if expected_typing.clone().is_some_and(|t| t.is_undefined() || t.is_null()) {
+            return Err(self.err_fmt.format(expr.span, format!("cannot create all-null or all-undefined arrays.")));
+        }
+
+        if expected_typing.clone().is_none() {
+            return Err(self.err_fmt.format(expr.span, format!("array type cannot be inferred.")));
+        }
+
+        let pointer_type = PointerType::Array(PointerTypeData {
+            capacity: Some(values.len()),
+            mutable: true,
+            nullable: false,
+        });
+
+        let rest = expr.clone();
+
+        let mut expected_typing = expected_typing.unwrap();
+        let type_data = expected_typing.get_mut_type_data().unwrap();
+        type_data.pointer = Some(pointer_type);
+        
+        let data = ArrayLiteralExpressionData {
+            values,
+            typing: Some(expected_typing),
+            ..rest
+        };
+
+        Ok(Expression::ArrayLiteral(data))
+    }
+
+    fn visit_array_access_expr(&mut self, expr: &ArrayAccessExpressionData) -> SemaExprResult {
+        let identifier = self.resolve_identifier(&expr.left);
+
+        let symbol = self.lookup(&identifier.lexeme).ok_or_else(|| {
+            self.err_fmt.format(
+                identifier.span,
+                format!("undeclared variable: {}", identifier.lexeme),
+            )
+        })?;
+
+        if !symbol.typing.is_array() {
+            return Err(self.err_fmt.format(
+                identifier.span,
+                format!("the variable {} is not an array.", identifier.lexeme),
+            ));
+        }
+
+        /*let array_type = match symbol.typing.get_type_data().unwrap().pointer.unwrap() {
+            PointerType::Array(d) => d,
+            _ => unreachable!()
+        };*/
+
+        let index = self.visit_expr(&expr.index)?;
+        let index_typing = index.get_typing().unwrap();
+
+        if !index_typing.is_integer() {
+            return Err(self.err_fmt.format(
+                identifier.span,
+                format!(
+                    "only can access array with an integer type, but received: {}.",
+                    index_typing
+                ),
+            ));
+        }
+
+        let mut value_type = symbol.typing.clone();
+        let type_data = value_type.get_mut_type_data().unwrap();
+        type_data.pointer = None;
+
+        let data = ArrayAccessExpressionData {
+            left: Box::new(self.visit_expr(&expr.left)?),
+            index: Box::new(index),
+            typing: Some(value_type),
+            ..expr.clone()
+        };
+
+        Ok(Expression::ArrayAccess(data))
+    }
+
+    fn visit_builtin_call_expr(&mut self, expr: &BuiltinCallExpressionData) -> SemaExprResult {
+        todo!()
+    }
+
+    fn visit_deref_expr(&mut self, expr: &DereferenceExpressionData) -> SemaExprResult {
+        todo!()
+    }
+
+    fn visit_ref_expr(&mut self, expr: &ReferenceExpressionData) -> SemaExprResult {
+        todo!()
     }
 }
 
@@ -266,12 +385,21 @@ impl SemanticAnalyzer {
 
     pub fn analyze(&mut self) -> Result<Vec<Statement>, String> {
         let mut program = Vec::new();
-        
+
         while let Some(stmt) = self.program.next() {
             let tir_stmt = self.visit_stmt(&stmt)?;
             program.push(tir_stmt);
         }
-        
+
         Ok(program)
+    }
+
+    pub fn resolve_identifier(&self, expr: &Expression) -> Token {
+        match expr {
+            Expression::Identifier(d) => d.value.clone(),
+            Expression::Dereference(d) => self.resolve_identifier(&d.identifier),
+            Expression::ArrayAccess(d) => self.resolve_identifier(&d.left),
+            _ => unreachable!(),
+        }
     }
 }

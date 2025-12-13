@@ -32,6 +32,10 @@ impl Lexer {
             (TokenKind::Var, Regex::new(r"^var\b").unwrap()),
             (TokenKind::Begin, Regex::new(r"^begin\b").unwrap()),
             (TokenKind::End, Regex::new(r"^end\b").unwrap()),
+            (TokenKind::True, Regex::new(r"^true\b").unwrap()),
+            (TokenKind::False, Regex::new(r"^false\b").unwrap()),
+            (TokenKind::Undefined, Regex::new(r"^undefined\b").unwrap()),
+            (TokenKind::Null, Regex::new(r"^null\b").unwrap()),
             (
                 TokenKind::Float,
                 Regex::new(r"^[+-]?(?:\d+\.\d*|\d*\.\d+)(?:[eE][+-]?\d+)?").unwrap(),
@@ -48,24 +52,37 @@ impl Lexer {
             (TokenKind::Equal, Regex::new(r"^=").unwrap()),
             (TokenKind::Colon, Regex::new(r"^:").unwrap()),
             (TokenKind::SemiColon, Regex::new(r"^;").unwrap()),
-            (TokenKind::At, Regex::new(r"^@").unwrap())
+            (TokenKind::At, Regex::new(r"^@").unwrap()),
+            (TokenKind::Comma, Regex::new(r"^,").unwrap()),
+            (TokenKind::Star, Regex::new(r"^\*").unwrap()),
+            (TokenKind::Ampersand, Regex::new(r"^&").unwrap()),
+            (TokenKind::OpenParen, Regex::new(r"^\(").unwrap()),
+            (TokenKind::CloseParen, Regex::new(r"^\)").unwrap()),
+            (TokenKind::OpenBrace, Regex::new(r"^\[").unwrap()),
+            (TokenKind::CloseBrace, Regex::new(r"^\]").unwrap()),
+            (TokenKind::Question, Regex::new(r"^\?").unwrap()),
         ];
 
         let mut tokens: Vec<Token> = Vec::with_capacity(128);
         let mut source = self.source.chars().peekable();
+        let lines = self.source.lines().count();
 
-        while source.peek().is_some() {
-            while source.next_if_eq(&'\n').is_some() {
-                self.line += 1;
-                self.col = 1;
+        while source.peek().is_some() && self.line <= lines {
+            while let Some(c) = source.next_if(|c| c.is_whitespace() || c == &'\n') {
+                if c == '\n' {
+                    self.line += 1;
+                    self.col = 1;
+                } else {
+                    self.col += 1;
+                }
             }
 
-            while source.next_if(|c| c.is_whitespace()).is_some() {
-                self.col += 1;
-            }
-            
+            if source.peek().is_none() {
+                break;
+            }   
+
             let mut matched = false;
-            
+
             for (kind, regex) in regexes.iter() {
                 let current: String = source.clone().collect();
 
@@ -83,9 +100,9 @@ impl Lexer {
                     self.col += consumed;
 
                     source.nth(consumed - 1);
-                    
+
                     matched = true;
-                    
+
                     break;
                 }
             }
