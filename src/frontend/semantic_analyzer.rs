@@ -345,7 +345,27 @@ impl ExpressionVisitor<SemaExprResult> for SemanticAnalyzer {
     }
 
     fn visit_ref_expr(&mut self, expr: &ReferenceExpressionData) -> SemaExprResult {
-        todo!()
+        let identifier = self.visit_expr(&expr.identifier)?;
+        let mut typing = identifier.get_typing().unwrap().clone();
+
+        if typing.is_null() || typing.is_undefined() || typing.is_pointer() {
+            return Err(self.err_fmt.format(identifier.get_span(), format!("cannot create a reference to type: {}.", typing)));
+        }
+
+        let type_is_array = typing.is_array();
+        let type_data = typing.get_mut_type_data().unwrap();
+        type_data.pointer = Some(match type_is_array {
+            true => PointerType::Fat(PointerTypeData { capacity: None, mutable: expr.mutable, nullable: false }),
+            false => PointerType::Thin(PointerTypeData{ capacity: None, mutable: expr.mutable, nullable: false })
+        });
+
+        let data = ReferenceExpressionData {
+            identifier: Box::new(identifier),
+            typing: Some(typing),
+            ..expr.clone()
+        };
+
+        Ok(Expression::Reference(data))
     }
 }
 

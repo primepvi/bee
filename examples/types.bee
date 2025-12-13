@@ -1,11 +1,11 @@
-var n_u8: uint8;
-var n_u16: uint16;
+var n_u8: uint8?;
+var n_u16: uint16?;
 var n_u32: uint32 = 32;
 var n_u64: uint64 = 64;
 
-var n_i8: int8;
-var n_i16: int16;
-var n_i32: int32 = -32;
+var n_i8: int8?;
+var n_i16: int16? = undefined;
+const n_i32: int32 = -32;
 var n_i64: int64 = -64;
 
 var n_f32: float32 = 0.32;
@@ -13,18 +13,17 @@ var n_f64: float64 = 0.64;
 
 var str: @static string = "Hello, World";
 
-var unitialized: int32? = undefined;
-var unitialized_2: int32?;
+var undef: int32? = undefined;
+var unitialized: int32?;
 
-var arr_int: []var int64 = [10, 20, 30, 40, 50];
+var arr_int: []var int32 = [10, 20, 30, 40, 50];
+var arr_float: [3]float32 = [3.0, 5.0, 7.0];
+var arr_str: @static []string = ["Hello", str]; 
 
-var arr_float: [3]var float32 = [3.0, 5.0, 7.0];
-var arr_str: @static []string = ["Hello", "World"]; 
-
-var ptr_int: *int32;
+var ptr_int: *int32 = &n_i32;
 var ptr_arr_int: [*]var int32 = ptr_int;
-var ptr_unitialized_int: *var int32?;
+var ptr_unitialized_int: *var int32? = &n_i32;
 var ptr_unitialized_nullable_int: *?var int32? = null;
-
 var ptr_nullable: *?float32 = null;
-var ptr_arr_not_null: [*?]int32 = null;
+var ptr_arr_nullable: [*?]int32 = &arr_int;
+ptr_arr_nullable = null;
