@@ -86,259 +86,373 @@ impl Display for Token {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum PrimitiveTypeKind {
+    Bool,
+    UInt8,
+    UInt16,
+    UInt32,
+    UInt64,
+    Int8,
+    Int16,
+    Int32,
+    Int64,
+    Float32,
+    Float64,
+    String,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct PrimitiveType {
+    pub kind: PrimitiveTypeKind,
+    pub optional: bool,
+}
+
+impl PrimitiveType {
+    pub fn compatible(a: PrimitiveType, b: PrimitiveType) -> bool {
+        if a.optional && !b.optional {
+            return false;
+        }
+
+        if a.is_bool() || b.is_bool() {
+            return a.is_bool() == b.is_bool();
+        }
+
+        if a.is_string() || b.is_string() {
+            return a.is_string() == b.is_string();
+        }
+
+        match (a.is_float(), b.is_float()) {
+            // float -> float
+            (true, true) => a.get_size_in_bits() <= b.get_size_in_bits(),
+
+            // int -> float
+            (false, true) => {
+                let mantissa = if b.get_size_in_bits() == 32 { 24 } else { 53 };
+                a.get_size_in_bits() <= mantissa
+            }
+
+            // int -> int
+            (false, false) => {
+                if a.is_signed_integer() == a.is_signed_integer() {
+                    a.get_size_in_bits() <= b.get_size_in_bits()
+                } else {
+                    a.is_signed_integer()
+                        && !b.is_signed_integer()
+                        && a.get_size_in_bits() <= b.get_size_in_bits()
+                }
+            }
+
+            // float -> int
+            _ => false,
+        }
+    }
+
+    pub fn is_integer(&self) -> bool {
+        matches!(
+            self.kind,
+            PrimitiveTypeKind::UInt8
+                | PrimitiveTypeKind::UInt16
+                | PrimitiveTypeKind::UInt32
+                | PrimitiveTypeKind::UInt64
+                | PrimitiveTypeKind::Int8
+                | PrimitiveTypeKind::Int16
+                | PrimitiveTypeKind::Int32
+                | PrimitiveTypeKind::Int64
+        )
+    }
+
+    pub fn is_signed_integer(&self) -> bool {
+        matches!(
+            self.kind,
+            PrimitiveTypeKind::Int8
+                | PrimitiveTypeKind::Int16
+                | PrimitiveTypeKind::Int32
+                | PrimitiveTypeKind::Int64
+        )
+    }
+
+    pub fn is_float(&self) -> bool {
+        matches!(
+            self.kind,
+            PrimitiveTypeKind::Float32 | PrimitiveTypeKind::Float64
+        )
+    }
+
+    pub fn is_string(&self) -> bool {
+        matches!(self.kind, PrimitiveTypeKind::String)
+    }
+
+    pub fn is_bool(&self) -> bool {
+        matches!(self.kind, PrimitiveTypeKind::Bool)
+    }
+
+    pub fn get_size_in_bits(&self) -> usize {
+        match self.kind {
+            PrimitiveTypeKind::Bool => 1,
+            PrimitiveTypeKind::UInt8 | PrimitiveTypeKind::Int8 => 8,
+            PrimitiveTypeKind::UInt16 | PrimitiveTypeKind::Int16 => 16,
+            PrimitiveTypeKind::UInt32 | PrimitiveTypeKind::Int32 | PrimitiveTypeKind::Float32 => 32,
+            PrimitiveTypeKind::UInt64 | PrimitiveTypeKind::Int64 | PrimitiveTypeKind::Float64 => 64,
+            _ => 0,
+        }
+    }
+}
+
+impl fmt::Display for PrimitiveTypeKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            PrimitiveTypeKind::Bool => "bool",
+            PrimitiveTypeKind::UInt8 => "uint8",
+            PrimitiveTypeKind::UInt16 => "uint16",
+            PrimitiveTypeKind::UInt32 => "uint32",
+            PrimitiveTypeKind::UInt64 => "uint64",
+            PrimitiveTypeKind::Int8 => "int8",
+            PrimitiveTypeKind::Int16 => "int16",
+            PrimitiveTypeKind::Int32 => "int32",
+            PrimitiveTypeKind::Int64 => "int64",
+            PrimitiveTypeKind::Float32 => "float32",
+            PrimitiveTypeKind::Float64 => "float64",
+            PrimitiveTypeKind::String => "string",
+        };
+        write!(f, "{s}")
+    }
+}
+
+impl fmt::Display for PrimitiveType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.optional {
+            write!(f, "{}?", self.kind)
+        } else {
+            write!(f, "{}", self.kind)
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum PointerTypeKind {
+    Thin,
+    Fat,
+}
+
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct PointerTypeData {
+pub struct PointerType {
+    pub kind: PointerTypeKind,
+    pub inner: Box<Type>,
     pub capacity: Option<usize>,
     pub mutable: bool,
     pub nullable: bool,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub enum PointerType {
-    Thin(PointerTypeData),
-    Fat(PointerTypeData),
-    Array(PointerTypeData),
-}
-
 impl fmt::Display for PointerType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            PointerType::Thin(d) => write!(
-                f,
-                "*{}{}",
-                if d.nullable { "?" } else { "" },
-                if d.mutable { "var" } else { "" }
-            ),
-            PointerType::Fat(d) => write!(
-                f,
-                "[*{}]{}",
-                if d.nullable { "?" } else { "" },
-                if d.mutable { "var" } else { "" }
-            ),
-            PointerType::Array(d) => {
-                write!(
-                    f,
-                    "[{}]{}",
-                    d.capacity.map(|t| t.to_string()).unwrap_or("".to_string()),
-                    if d.mutable { "var" } else { "" }
-                )
-            }
+        let nullable = if self.nullable { "?" } else { "" };
+        let mutable = if self.mutable { "var" } else { "" };
+
+        match self.kind {
+            PointerTypeKind::Thin => write!(f, "*{}{} {}", nullable, mutable, self.inner),
+            PointerTypeKind::Fat => write!(f, "[*{}]{} {}", nullable, mutable, self.inner),
         }
     }
 }
 
+impl PointerType {
+pub fn compatible(a: &PointerType, b: &PointerType) -> bool {
+        if a.kind != b.kind {
+            return false;
+        }
+
+        if a.nullable && !b.nullable {
+            return false;
+        }
+
+        if !a.mutable && b.mutable {
+            return false;
+        }
+
+        if let PointerTypeKind::Fat = a.kind
+            && !(a.capacity == b.capacity || (a.capacity.is_some() && b.capacity.is_none())) {
+                return false;
+            }
+
+        a.inner == b.inner
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct TypeData {
-    pub pointer: Option<PointerType>,
-    pub is_static: bool,
-    pub optional: bool,
+pub struct ArrayType {
+    pub inner: Box<Type>,
+    pub capacity: Option<usize>,
+    pub mutable: bool,
+}
+
+impl fmt::Display for ArrayType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "[{}]{} {}",
+            self.capacity
+                .map(|c| c.to_string())
+                .unwrap_or("".to_string()),
+            if self.mutable { "var" } else { "" },
+            self.inner
+        )
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Type {
-    Bool(TypeData),
-    UInt8(TypeData),
-    UInt16(TypeData),
-    UInt32(TypeData),
-    UInt64(TypeData),
-    Int8(TypeData),
-    Int16(TypeData),
-    Int32(TypeData),
-    Int64(TypeData),
-    Float32(TypeData),
-    Float64(TypeData),
-    String(TypeData),
+    Primitive(PrimitiveType),
+    Pointer(PointerType),
+    Array(ArrayType),
     Null,
     Undefined,
 }
 
 impl Type {
     pub fn from_literal_expr(expr: &LiteralExpressionData) -> Option<Type> {
-        let data = TypeData {
-            pointer: None,
-            is_static: false,
-            optional: false,
-        };
-
         match expr.value.kind {
-            TokenKind::Integer => Some(Type::Int32(data)),
-            TokenKind::Float => Some(Type::Float32(data)),
-            TokenKind::True | TokenKind::False => Some(Type::Bool(data)),
-            TokenKind::Undefined => Some(Type::Undefined),
-            TokenKind::Null => Some(Type::Null),
-            TokenKind::String => Some(Type::String(TypeData {
-                pointer: None,
-                is_static: true,
+            TokenKind::Integer => Some(Type::Primitive(PrimitiveType {
+                kind: PrimitiveTypeKind::Int32,
                 optional: false,
             })),
+            TokenKind::Float => Some(Type::Primitive(PrimitiveType {
+                kind: PrimitiveTypeKind::Float32,
+                optional: false,
+            })),
+            TokenKind::True | TokenKind::False => Some(Type::Primitive(PrimitiveType {
+                kind: PrimitiveTypeKind::Bool,
+                optional: false,
+            })),
+            TokenKind::String => Some(Type::Primitive(PrimitiveType {
+                kind: PrimitiveTypeKind::String,
+                optional: false,
+            })),
+            TokenKind::Undefined => Some(Type::Undefined),
+            TokenKind::Null => Some(Type::Null),
             _ => None,
         }
     }
 
-    pub fn from_type_descriptor(descriptor: &TypeDescriptor) -> Option<Type> {
-        let pointer_type: Option<PointerType> =
-            descriptor.pointer.clone().map(|pointer| match pointer {
-                Pointer::Thin(pointer_descriptor) => PointerType::Thin(PointerTypeData {
-                    capacity: None,
-                    mutable: pointer_descriptor.mutable,
-                    nullable: pointer_descriptor.nullable,
-                }),
-                Pointer::Fat(pointer_descriptor) => PointerType::Fat(PointerTypeData {
-                    capacity: None,
-                    mutable: pointer_descriptor.mutable,
-                    nullable: pointer_descriptor.nullable,
-                }),
-                Pointer::Array(pointer_descriptor) => PointerType::Array(PointerTypeData {
-                    capacity: pointer_descriptor
-                        .capacity
-                        .map(|t| t.lexeme.parse::<usize>().unwrap()),
-                    mutable: pointer_descriptor.mutable,
-                    nullable: pointer_descriptor.nullable,
-                }),
+    pub fn from_type_annotation(annotation: &TypeAnnotation) -> Option<Type> {
+        if let TypeAnnotation::Identifier { token, optional } = annotation.clone() {
+            return match token.lexeme.as_str() {
+                "uint8" => Some(Type::Primitive(PrimitiveType {
+                    kind: PrimitiveTypeKind::UInt8,
+                    optional,
+                })),
+                "uint16" => Some(Type::Primitive(PrimitiveType {
+                    kind: PrimitiveTypeKind::UInt16,
+                    optional,
+                })),
+                "uint32" => Some(Type::Primitive(PrimitiveType {
+                    kind: PrimitiveTypeKind::UInt32,
+                    optional,
+                })),
+                "uint64" => Some(Type::Primitive(PrimitiveType {
+                    kind: PrimitiveTypeKind::UInt64,
+                    optional,
+                })),
+                "int8" => Some(Type::Primitive(PrimitiveType {
+                    kind: PrimitiveTypeKind::Int8,
+                    optional,
+                })),
+                "int16" => Some(Type::Primitive(PrimitiveType {
+                    kind: PrimitiveTypeKind::Int16,
+                    optional,
+                })),
+                "int32" => Some(Type::Primitive(PrimitiveType {
+                    kind: PrimitiveTypeKind::Int32,
+                    optional,
+                })),
+                "int64" => Some(Type::Primitive(PrimitiveType {
+                    kind: PrimitiveTypeKind::Int64,
+                    optional,
+                })),
+                "float32" => Some(Type::Primitive(PrimitiveType {
+                    kind: PrimitiveTypeKind::Float32,
+                    optional,
+                })),
+                "float64" => Some(Type::Primitive(PrimitiveType {
+                    kind: PrimitiveTypeKind::Float64,
+                    optional,
+                })),
+                "string" => Some(Type::Primitive(PrimitiveType {
+                    kind: PrimitiveTypeKind::String,
+                    optional,
+                })),
+                "bool" => Some(Type::Primitive(PrimitiveType {
+                    kind: PrimitiveTypeKind::Bool,
+                    optional,
+                })),
+                "undefined" => Some(Type::Undefined),
+                "null" => Some(Type::Null),
+                _ => None,
+            };
+        }
+
+        if let TypeAnnotation::Pointer {
+            kind,
+            capacity,
+            inner,
+            nullable,
+            mutable,
+        } = annotation.clone()
+        {
+            let inner_type = Type::from_type_annotation(&inner);
+            return inner_type.map(|t| {
+                Type::Pointer(PointerType {
+                    kind,
+                    inner: Box::new(t),
+                    capacity: capacity.map(|t| t.lexeme.parse::<usize>().unwrap()),
+                    mutable,
+                    nullable,
+                })
             });
-
-        let default_type_data = TypeData {
-            pointer: pointer_type,
-            is_static: descriptor
-                .lifetime
-                .clone()
-                .is_some_and(|lf| lf.lexeme == "static"),
-            optional: descriptor.optional,
-        };
-
-        match descriptor.identifier.lexeme.as_str() {
-            "uint8" => Some(Type::UInt8(default_type_data)),
-            "uint16" => Some(Type::UInt16(default_type_data)),
-            "uint32" => Some(Type::UInt32(default_type_data)),
-            "uint64" => Some(Type::UInt64(default_type_data)),
-            "int8" => Some(Type::Int8(default_type_data)),
-            "int16" => Some(Type::Int16(default_type_data)),
-            "int32" => Some(Type::Int32(default_type_data)),
-            "int64" => Some(Type::Int64(default_type_data)),
-            "float32" => Some(Type::Float32(default_type_data)),
-            "float64" => Some(Type::Float64(default_type_data)),
-            "string" => Some(Type::String(default_type_data)),
-            "bool" => Some(Type::Bool(default_type_data)),
-            "undefined" => Some(Type::Undefined),
-            "null" => Some(Type::Null),
-            _ => None,
-        }
-    }
-
-    pub fn is_signed(&self) -> bool {
-        matches!(
-            self,
-            Type::Int8(_) | Type::Int16(_) | Type::Int32(_) | Type::Int64(_)
-        )
-    }
-
-    pub fn is_integer(&self) -> bool {
-        if self.is_signed() {
-            return true;
         }
 
-        matches!(
-            self,
-            Type::UInt8(_) | Type::UInt16(_) | Type::UInt32(_) | Type::UInt64(_)
-        )
+        if let TypeAnnotation::Array {
+            capacity,
+            inner,
+            mutable,
+        } = annotation.clone()
+        {
+            let inner_type = Type::from_type_annotation(&inner);
+            return inner_type.map(|t| {
+                Type::Array(ArrayType {
+                    inner: Box::new(t),
+                    capacity: capacity.map(|t| t.lexeme.parse::<usize>().unwrap()),
+                    mutable,
+                })
+            });
+        }
+
+        None
     }
 
-    pub fn is_float(&self) -> bool {
-        matches!(self, Type::Float32(_) | Type::Float64(_))
-    }
-
-    pub fn is_numeric(&self) -> bool {
-        self.is_integer() || self.is_float()
-    }
-
-    pub fn is_string(&self) -> bool {
-        matches!(self, Type::String(_))
+    pub fn compatible(a: &Type, b: &Type) -> bool {
+        match (a, b) {
+            (Type::Null, Type::Pointer(p)) => p.nullable,
+            (Type::Undefined, Type::Primitive(p)) => p.optional,
+            (Type::Primitive(pa), Type::Primitive(pb)) => PrimitiveType::compatible(*pa, *pb),
+            (Type::Pointer(pa), Type::Pointer(pb)) => PointerType::compatible(pa, pb),
+            (Type::Array(aa), Type::Array(bb)) => {
+                (aa.capacity == bb.capacity || aa.capacity.is_some() && bb.capacity.is_none() ) && Type::compatible(&aa.inner, &bb.inner)
+            }
+            _ => false,
+        }
     }
 
     pub fn is_pointer(&self) -> bool {
-        if self.is_array() {
-            return false;
-        }
-
-        match self {
-            Type::Bool(type_data) => type_data.pointer.is_some(),
-            Type::UInt8(type_data) => type_data.pointer.is_some(),
-            Type::UInt16(type_data) => type_data.pointer.is_some(),
-            Type::UInt32(type_data) => type_data.pointer.is_some(),
-            Type::UInt64(type_data) => type_data.pointer.is_some(),
-            Type::Int8(type_data) => type_data.pointer.is_some(),
-            Type::Int16(type_data) => type_data.pointer.is_some(),
-            Type::Int32(type_data) => type_data.pointer.is_some(),
-            Type::Int64(type_data) => type_data.pointer.is_some(),
-            Type::Float32(type_data) => type_data.pointer.is_some(),
-            Type::Float64(type_data) => type_data.pointer.is_some(),
-            Type::String(type_data) => type_data.pointer.is_some(),
-            _ => false,
-        }
+        matches!(self, Type::Pointer(_))
     }
 
-    pub fn is_nullable(&self) -> bool {
-        if !self.is_pointer() {
-            return false;
-        }
-
-        match self.get_type_data().unwrap().pointer.clone().unwrap() {
-            PointerType::Thin(pointer_type_data) => pointer_type_data.nullable,
-            PointerType::Fat(pointer_type_data) => pointer_type_data.nullable,
-            _ => false,
-        }
-    }
-
-    pub fn is_optional(&self) -> bool {
-        self.get_type_data().is_some_and(|t| t.optional)
-    }
-
-    pub fn get_type_data(&self) -> Option<&TypeData> {
-        match self {
-            Type::Bool(type_data) => Some(type_data),
-            Type::UInt8(type_data) => Some(type_data),
-            Type::UInt16(type_data) => Some(type_data),
-            Type::UInt32(type_data) => Some(type_data),
-            Type::UInt64(type_data) => Some(type_data),
-            Type::Int8(type_data) => Some(type_data),
-            Type::Int16(type_data) => Some(type_data),
-            Type::Int32(type_data) => Some(type_data),
-            Type::Int64(type_data) => Some(type_data),
-            Type::Float32(type_data) => Some(type_data),
-            Type::Float64(type_data) => Some(type_data),
-            Type::String(type_data) => Some(type_data),
-            _ => None,
-        }
-    }
-
-    pub fn get_mut_type_data(&mut self) -> Option<&mut TypeData> {
-        match self {
-            Type::Bool(type_data) => Some(type_data),
-            Type::UInt8(type_data) => Some(type_data),
-            Type::UInt16(type_data) => Some(type_data),
-            Type::UInt32(type_data) => Some(type_data),
-            Type::UInt64(type_data) => Some(type_data),
-            Type::Int8(type_data) => Some(type_data),
-            Type::Int16(type_data) => Some(type_data),
-            Type::Int32(type_data) => Some(type_data),
-            Type::Int64(type_data) => Some(type_data),
-            Type::Float32(type_data) => Some(type_data),
-            Type::Float64(type_data) => Some(type_data),
-            Type::String(type_data) => Some(type_data),
-            _ => None,
-        }
+    pub fn is_primitive(&self) -> bool {
+        matches!(self, Type::Primitive(_))
     }
 
     pub fn is_array(&self) -> bool {
-        self.get_type_data().is_some_and(|t| {
-            t.pointer
-                .clone()
-                .is_some_and(|p| matches!(p, PointerType::Array(_)))
-        })
-    }
-
-    pub fn is_bool(&self) -> bool {
-        matches!(self, Type::Bool(_))
+        matches!(self, Type::Array(_))
     }
 
     pub fn is_undefined(&self) -> bool {
@@ -349,170 +463,134 @@ impl Type {
         matches!(self, Type::Null)
     }
 
-    pub fn is_compatible_with(&self, other: &Type) -> bool {
-        if self.is_null() && other.is_nullable() {
-            return true;
-        }
-
-        if self.is_pointer() != other.is_pointer() {
-            return false;
-        }
-
-        // only bool -> bool
-        if self.is_bool() || other.is_bool() {
-            return self.is_bool() && other.is_bool();
-        }
-
-        if self.is_undefined() && other.is_optional() {
-            return true;
-        }
-
-        // only string -> string
-        if self.is_string() || other.is_string() {
-            return self.is_string() && other.is_string();
-        }
-
-        if self.is_array() != other.is_array() {
-            return false;
-        }
-
-        if (self.is_pointer() || self.is_array()) && (other.is_pointer() || other.is_array()) {
-            let self_ptr = self.get_type_data().unwrap().pointer.clone().unwrap();
-            let other_ptr = self.get_type_data().unwrap().pointer.clone().unwrap();
-
-            let mutable_case = |ap: &PointerTypeData, bp: &PointerTypeData| {
-                ap.mutable || !ap.mutable && !bp.mutable
-            };
-            let nullable_case = |ap: &PointerTypeData, bp: &PointerTypeData| {
-                !ap.nullable || ap.nullable && bp.nullable
-            };
-
-            let ptr_case = match (self_ptr, other_ptr) {
-                (PointerType::Thin(ap), PointerType::Thin(bp)) => {
-                    mutable_case(&ap, &bp) && nullable_case(&ap, &bp)
-                }
-                (PointerType::Thin(ap), PointerType::Fat(bp)) => {
-                    mutable_case(&ap, &bp) && nullable_case(&ap, &bp)
-                }
-                (PointerType::Fat(ap), PointerType::Fat(bp)) => {
-                    mutable_case(&ap, &bp) && nullable_case(&ap, &bp) && ap.capacity == bp.capacity
-                }
-                (PointerType::Array(ap), PointerType::Array(bp)) => {
-                    mutable_case(&ap, &bp) && nullable_case(&ap, &bp) && ap.capacity == bp.capacity
-                }
-                _ => false,
-            };
-
-            if !ptr_case {
-                return false;
-            }
-
-            let mut at = self.clone();
-            let mut bt = self.clone();
-
-            at.get_mut_type_data().unwrap().pointer = None;
-            bt.get_mut_type_data().unwrap().pointer = None;
-
-            return at.is_compatible_with(&bt);
-        }
-
-        // Numerics
-        if !self.is_numeric() || !other.is_numeric() {
-            return false;
-        }
-
-        match (self.is_float(), other.is_float()) {
-            // int → int
-            (false, false) => {
-                if self.is_signed() == other.is_signed() {
-                    self.get_numeric_size() <= other.get_numeric_size()
-                } else {
-                    self.is_signed()
-                        && !other.is_signed()
-                        && self.get_numeric_size() <= other.get_numeric_size()
-                }
-            }
-
-            // int → float
-            (false, true) => {
-                let mantissa = if other.get_numeric_size() == 32 {
-                    24
-                } else {
-                    53
-                };
-                self.get_numeric_size() <= mantissa
-            }
-
-            // float → float
-            (true, true) => self.get_numeric_size() <= other.get_numeric_size(),
-
-            // float → int
-            _ => false,
+    pub fn get_primitive(&self) -> Option<PrimitiveType> {
+        match self {
+            Type::Primitive(p) => Some(*p),
+            _ => None
         }
     }
 
-    pub fn get_numeric_size(&self) -> usize {
+    pub fn get_array(&self) -> Option<ArrayType> {
         match self {
-            Type::Bool(_) => 1,
-            Type::UInt8(_) | Type::Int8(_) => 8,
-            Type::UInt16(_) | Type::Int16(_) => 16,
-            Type::UInt32(_) | Type::Int32(_) | Type::Float32(_) => 32,
-            Type::UInt64(_) | Type::Int64(_) | Type::Float64(_) => 64,
-            _ => 0,
+            Type::Array(a) => Some(a.clone()),
+            _ => None
+        }
+    }
+
+    pub fn get_mut_array(&mut self) -> Option<&mut ArrayType> {
+        match self {
+            Type::Array(a) => Some(a),
+            _ => None
+        }
+    }
+
+    pub fn get_pointer(&self) -> Option<PointerType> {
+        match self {
+            Type::Pointer(p) => Some(p.clone()),
+            _ => None
+        }
+    }
+
+    pub fn get_mut_pointer(&mut self) -> Option<&mut PointerType> {
+        match self {
+            Type::Pointer(p) => Some(p),
+            _ => None
         }
     }
 }
 
 impl Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let write_ptr = |p: Option<PointerType>| {
-            if let Some(ptr) = p {
-                format!("{} ", ptr)
-            } else {
-                "".to_string()
-            }
-        };
-
         match self {
-            Type::UInt8(d) => write!(f, "{}uint8", write_ptr(d.pointer.clone())),
-            Type::UInt16(d) => write!(f, "{}uint16", write_ptr(d.pointer.clone())),
-            Type::UInt32(d) => write!(f, "{}uint32", write_ptr(d.pointer.clone())),
-            Type::UInt64(d) => write!(f, "{}uint64", write_ptr(d.pointer.clone())),
-            Type::Int8(d) => write!(f, "{}int8", write_ptr(d.pointer.clone())),
-            Type::Int16(d) => write!(f, "{}int16", write_ptr(d.pointer.clone())),
-            Type::Int32(d) => write!(f, "{}int32", write_ptr(d.pointer.clone())),
-            Type::Int64(d) => write!(f, "{}int64", write_ptr(d.pointer.clone())),
-            Type::Float32(d) => write!(f, "{}float32", write_ptr(d.pointer.clone())),
-            Type::Float64(d) => write!(f, "{}float64", write_ptr(d.pointer.clone())),
-            Type::String(d) => write!(f, "{}string", write_ptr(d.pointer.clone())),
-            Type::Bool(d) => write!(f, "{}bool", write_ptr(d.pointer.clone())),
-            Type::Undefined => write!(f, "undefined"),
+            Type::Primitive(t) => write!(f, "{t}"),
+            Type::Pointer(t) => write!(f, "{t}"),
+            Type::Array(t) => write!(f, "{t}"),
             Type::Null => write!(f, "null"),
+            Type::Undefined => write!(f, "undefined"),
         }
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct PointerDescriptor {
-    pub nullable: bool,
-    pub capacity: Option<Token>,
-    pub mutable: bool,
+pub enum TypeAnnotation {
+    Identifier {
+        token: Token,
+        optional: bool,
+    },
+    Pointer {
+        kind: PointerTypeKind,
+        capacity: Option<Token>,
+        inner: Box<TypeAnnotation>,
+        nullable: bool,
+        mutable: bool,
+    },
+    Array {
+        capacity: Option<Token>,
+        inner: Box<TypeAnnotation>,
+        mutable: bool,
+    },
 }
 
-#[derive(Clone, Debug)]
-pub enum Pointer {
-    Thin(PointerDescriptor),
-    Fat(PointerDescriptor),
-    Array(PointerDescriptor),
+impl fmt::Display for TypeAnnotation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TypeAnnotation::Identifier { token, optional } => {
+                if *optional {
+                    write!(f, "{}?", token.lexeme)
+                } else {
+                    write!(f, "{}", token.lexeme)
+                }
+            }
+
+            TypeAnnotation::Pointer {
+                kind,
+                capacity: _,
+                inner,
+                nullable,
+                mutable,
+            } => {
+                match kind {
+                    PointerTypeKind::Thin => write!(f, "*{}", if *mutable { "?" } else { "" })?,
+                    PointerTypeKind::Fat => write!(f, "[*{}]", if *mutable { "?" } else { "" })?,
+                }
+
+                if *mutable {
+                    write!(f, "var ")?;
+                }
+
+                write!(f, "{}", inner)?;
+
+                Ok(())
+            }
+
+            TypeAnnotation::Array {
+                capacity,
+                inner,
+                mutable,
+            } => {
+                match capacity {
+                    Some(token) => write!(f, "[{}]", token.lexeme)?,
+                    None => write!(f, "[]")?,
+                }
+
+                if *mutable {
+                    write!(f, "var ")?;
+                }
+
+                write!(f, "{}", inner)
+            }
+        }
+    }
 }
 
-#[derive(Clone, Debug)]
-pub struct TypeDescriptor {
-    pub identifier: Token,
-    pub lifetime: Option<Token>,
-    pub comptime: bool,
-    pub optional: bool,
-    pub pointer: Option<Pointer>,
+impl TypeAnnotation {
+    pub fn get_span(&self) -> Span {       
+        match self {
+            TypeAnnotation::Identifier { token, optional } => token.span,
+            TypeAnnotation::Pointer { kind, capacity, inner, nullable, mutable } => inner.get_span(),
+            TypeAnnotation::Array { capacity, inner, mutable } => inner.get_span(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -619,7 +697,7 @@ impl Expression {
 pub struct DeclareVariableStatementData {
     pub constant: bool,
     pub identifier: Token,
-    pub type_descriptor: Option<TypeDescriptor>,
+    pub type_annotation: Option<TypeAnnotation>,
     pub value: Option<Expression>,
     pub span: Span,
     pub typing: Option<Type>,

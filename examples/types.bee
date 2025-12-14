@@ -5,25 +5,27 @@ var n_u64: uint64 = 64;
 
 var n_i8: int8?;
 var n_i16: int16? = undefined;
-const n_i32: int32 = -32;
+var n_i32: int32? = -32;
 var n_i64: int64 = -64;
 
 var n_f32: float32 = 0.32;
 var n_f64: float64 = 0.64;
 
-const str: @static string = "Hello, World";
+const str: string = "Hello, World";
 
 var undef: int32? = undefined;
 var unitialized: int32?;
 
-var arr_int: [4]var int32 = [n_u8, n_u8];
+var arr_int: [4]var int32 = [32, 32, 32, 32];
 var arr_float: [3]var float32 = [3.0, n_f32, 7.0];
-var arr_str: @static []var string = ["Hello", str]; 
+var arr_str: []var string = ["Hello", str]; 
 arr_str[0] = "hello world";
 
-var ptr_int: *int32 = &n_i32;
-var ptr_arr_int: [*]var int32 = ptr_int;
-var ptr_unitialized_int: *var int32? = &n_i32;
+var ptr_int: *int32? = &n_i32;
+arr_int[1] = *ptr_int;
+
+var ptr_arr_int: [*]var int32 = &var arr_int;
+var ptr_unitialized_int: *var int32? = &var n_i32;
 var ptr_unitialized_nullable_int: *?var int32? = null;
 var ptr_nullable: *?float32 = null;
 var ptr_arr_nullable: [*?]int32 = &arr_int;

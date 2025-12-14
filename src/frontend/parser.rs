@@ -58,7 +58,7 @@ impl Parser {
 
     fn parse_statement(&mut self) -> Result<Statement, String> {
         let current = self.tokens.peek().unwrap();
-    
+
         match current.kind {
             TokenKind::Const | TokenKind::Var => self.parse_declare_var_statement(),
             TokenKind::Begin => self.parse_block_statement(),
@@ -73,7 +73,7 @@ impl Parser {
     fn parse_declare_var_statement(&mut self) -> Result<Statement, String> {
         let var_token = self.tokens.next().unwrap();
         let constant = var_token.kind == TokenKind::Const;
-        let mut type_descriptor: Option<TypeDescriptor> = None;
+        let mut type_annotation: Option<TypeAnnotation> = None;
         let typing: Option<Type> = None;
 
         let identifier = self.expect(TokenKind::Identifier)?;
@@ -103,7 +103,7 @@ impl Parser {
             let data = DeclareVariableStatementData {
                 constant,
                 identifier,
-                type_descriptor,
+                type_annotation,
                 value,
                 span,
                 typing,
@@ -112,7 +112,7 @@ impl Parser {
             return Ok(Statement::DeclareVariable(data));
         }
 
-        type_descriptor = Some(self.parse_type_anotation()?);
+        type_annotation = Some(self.parse_type_anotation()?);
 
         let punc = self.expect_any("('=' or ';')", |k| {
             matches!(k, TokenKind::Equal | TokenKind::SemiColon)
@@ -136,7 +136,7 @@ impl Parser {
         let data = DeclareVariableStatementData {
             constant,
             identifier,
-            type_descriptor,
+            type_annotation,
             value,
             span,
             typing,
@@ -145,58 +145,73 @@ impl Parser {
         Ok(Statement::DeclareVariable(data))
     }
 
-    fn parse_type_anotation(&mut self) -> Result<TypeDescriptor, String> {
-        let mut lifetime: Option<Token> = None;
-        let mut ptr: Option<Pointer> = None;
-
-        if self.expect(TokenKind::At).is_ok() {
-            lifetime = Some(self.expect(TokenKind::Identifier)?);
+    fn parse_type_anotation(&mut self) -> Result<TypeAnnotation, String> {
+        if self.get_current_token().kind != TokenKind::Identifier {
+            self.parse_pointer_type_annotation()
+        } else {
+            self.parse_primitive_type_annotation()
         }
+    }
 
-        if self.expect(TokenKind::Star).is_ok() {
-            // thin pointer
-            let ptr_descriptor = PointerDescriptor {
+    fn parse_pointer_type_annotation(&mut self) -> Result<TypeAnnotation, String> {
+        let current = self.expect_any("'*' or '['", |k| {
+            matches!(k, TokenKind::Star | TokenKind::OpenBrace)
+        })?;
+
+        match current.kind {
+            TokenKind::Star => Ok(TypeAnnotation::Pointer {
+                kind: PointerTypeKind::Thin,
+                capacity: None,
                 nullable: self.expect(TokenKind::Question).is_ok(),
-                capacity: None,
                 mutable: self.expect(TokenKind::Var).is_ok(),
-            };
-
-            ptr = Some(Pointer::Thin(ptr_descriptor));
-        } else if self.expect(TokenKind::OpenBrace).is_ok() {
-            // fat pointer or array
-            let mut ptr_descriptor = PointerDescriptor {
-                nullable: false,
-                capacity: None,
-                mutable: false,
-            };
-
-            if self.expect(TokenKind::Star).is_ok() {
-                // fat pointer
-                ptr_descriptor.nullable = self.expect(TokenKind::Question).is_ok();
-                self.expect(TokenKind::CloseBrace)?;
-                ptr_descriptor.mutable = self.expect(TokenKind::Var).is_ok();
-                ptr = Some(Pointer::Fat(ptr_descriptor));
-            } else {
-                // array
-                if let Ok(cap_token) = self.expect(TokenKind::Integer) {
-                    ptr_descriptor.capacity = Some(cap_token);
+                inner: Box::new(self.parse_type_anotation()?),
+            }),
+            TokenKind::OpenBrace => {
+                if self.expect(TokenKind::Star).is_err() {
+                    self.parse_array_type_annotation()
+                } else {
+                    let nullable = self.expect(TokenKind::Question).is_ok();
+                    self.expect(TokenKind::CloseBrace)?;
+                    let mutable = self.expect(TokenKind::Var).is_ok();
+                    Ok(TypeAnnotation::Pointer {
+                        kind: PointerTypeKind::Fat,
+                        capacity: None,
+                        inner: Box::new(self.parse_type_anotation()?),
+                        nullable,
+                        mutable,
+                    })
                 }
-
-                self.expect(TokenKind::CloseBrace)?;
-                ptr_descriptor.mutable = self.expect(TokenKind::Var).is_ok();
-                ptr = Some(Pointer::Array(ptr_descriptor));
             }
+            _ => unreachable!(),
         }
+    }
 
+    fn parse_array_type_annotation(&mut self) -> Result<TypeAnnotation, String> {
+        if self.expect(TokenKind::CloseBrace).is_ok() {
+            let mutable = self.expect(TokenKind::Var).is_ok();
+
+            Ok(TypeAnnotation::Array {
+                capacity: None,
+                inner: Box::new(self.parse_type_anotation()?),
+                mutable,
+            })
+        } else {
+            let capacity = self.expect(TokenKind::Integer)?;
+            self.expect(TokenKind::CloseBrace)?;
+            let mutable = self.expect(TokenKind::Var).is_ok();
+            Ok(TypeAnnotation::Array {
+                capacity: Some(capacity),
+                inner: Box::new(self.parse_type_anotation()?),
+                mutable,
+            })
+        }
+    }
+
+    fn parse_primitive_type_annotation(&mut self) -> Result<TypeAnnotation, String> {
         let identifier = self.expect(TokenKind::Identifier)?;
-        let optional = self.expect(TokenKind::Question).is_ok();
-
-        Ok(TypeDescriptor {
-            identifier,
-            lifetime,
-            comptime: false,
-            optional,
-            pointer: ptr,
+        Ok(TypeAnnotation::Identifier {
+            token: identifier,
+            optional: self.expect(TokenKind::Question).is_ok(),
         })
     }
 
@@ -274,9 +289,12 @@ impl Parser {
         let mut arguments: Vec<Expression> = Vec::new();
 
         self.expect(TokenKind::OpenParen)?;
-        while !matches!(self.get_current_token().kind, TokenKind::Eof | TokenKind::CloseParen) {
+        while !matches!(
+            self.get_current_token().kind,
+            TokenKind::Eof | TokenKind::CloseParen
+        ) {
             arguments.push(self.parse_expr()?);
-            
+
             if self.expect(TokenKind::Comma).is_err() {
                 break;
             }
@@ -286,7 +304,7 @@ impl Parser {
         let data = BuiltinCallExpressionData {
             callee,
             arguments,
-            typing: None
+            typing: None,
         };
 
         Ok(Expression::BuiltinCall(data))
@@ -294,14 +312,14 @@ impl Parser {
 
     fn parse_deref_expr(&mut self) -> Result<Expression, String> {
         self.expect(TokenKind::Star)?;
-        
+
         let identifier = self.parse_expr()?;
         let span = identifier.get_span();
-        
+
         let data = DereferenceExpressionData {
             identifier: Box::new(identifier),
             span,
-            typing: None
+            typing: None,
         };
 
         let expr = Expression::Dereference(data);
@@ -317,15 +335,15 @@ impl Parser {
         self.expect(TokenKind::Ampersand)?;
 
         let mutable = self.expect(TokenKind::Var).is_ok();
-        
+
         let identifier = self.expect(TokenKind::Identifier)?;
         let span = identifier.span;
-        
+
         let data = ReferenceExpressionData {
             identifier,
             mutable,
             span,
-            typing: None
+            typing: None,
         };
 
         Ok(Expression::Reference(data))
@@ -334,10 +352,13 @@ impl Parser {
     fn parse_array_expr(&mut self) -> Result<Expression, String> {
         let open = self.expect(TokenKind::OpenBrace)?;
         let mut values: Vec<Expression> = Vec::new();
-        
-        while !matches!(self.get_current_token().kind, TokenKind::Eof | TokenKind::CloseBrace) {
+
+        while !matches!(
+            self.get_current_token().kind,
+            TokenKind::Eof | TokenKind::CloseBrace
+        ) {
             values.push(self.parse_expr()?);
-            
+
             if self.expect(TokenKind::Comma).is_err() {
                 break;
             }
@@ -347,13 +368,13 @@ impl Parser {
         let span = Span {
             len: close.span.col - open.span.col + 1,
             line: close.span.line,
-            col: open.span.col
+            col: open.span.col,
         };
-        
+
         let data = ArrayLiteralExpressionData {
             values,
             span,
-            typing: None
+            typing: None,
         };
 
         Ok(Expression::ArrayLiteral(data))
@@ -442,7 +463,7 @@ impl Parser {
             left: Box::new(left),
             index: Box::new(index),
             span,
-            typing: None
+            typing: None,
         };
 
         let expr = Expression::ArrayAccess(data);

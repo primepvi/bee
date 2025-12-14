@@ -61,7 +61,7 @@ fn main() {
 
     let mut parser = Parser::new(tokens, source.to_string(), input_path.to_string());
     let ast = parser.parse().unwrap_or_else(|e| panic!("{e}"));
-
+        
     let mut semantic_analyzer = SemanticAnalyzer::new(ast, source.to_string(), input_path.to_string());
     let typed_ast = semantic_analyzer.analyze().unwrap_or_else(|e| panic!("{e}"));
 

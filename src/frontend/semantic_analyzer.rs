@@ -97,12 +97,12 @@ impl StatementVisitor<SemaStmtResult> for SemanticAnalyzer {
         &mut self,
         stmt: &DeclareVariableStatementData,
     ) -> SemaStmtResult {
-        let mut descriptor_typing: Option<Type> = None;
-        if let Some(d) = &stmt.type_descriptor {
-            descriptor_typing = Some(Type::from_type_descriptor(d).ok_or_else(|| {
+        let mut annotation_typing: Option<Type> = None;
+        if let Some(t) = &stmt.type_annotation {
+            annotation_typing = Some(Type::from_type_annotation(t).ok_or_else(|| {
                 self.err_fmt.format(
-                    d.identifier.span,
-                    format!("invalid type provided: '{}'", d.identifier.lexeme),
+                    t.get_span(),
+                    format!("invalid type provided: '{}'", t),
                 )
             })?);
         }
@@ -113,31 +113,31 @@ impl StatementVisitor<SemaStmtResult> for SemanticAnalyzer {
         }
 
         let value_typing = expr.as_ref().map(|e| e.get_typing().unwrap());
-        if descriptor_typing.is_none() && value_typing.is_none() {
+        if annotation_typing.is_none() && value_typing.is_none() {
             return Err(self.err_fmt.format(
                 stmt.identifier.span,
-                "uninitialized variables must have type descriptors.".to_string(),
+                "uninitialized variables must have type annotation.".to_string(),
             ));
         }
 
-        if let (Some(v_type), Some(d_type)) = (value_typing, descriptor_typing.clone())
-            && !v_type.is_compatible_with(&d_type)
+        if let (Some(v_type), Some(d_type)) = (value_typing, annotation_typing.clone())
+            && !Type::compatible(v_type, &d_type)
         {
             return Err(self.err_fmt.format(
-                stmt.type_descriptor.as_ref().unwrap().identifier.span,
+                stmt.type_annotation.clone().unwrap().get_span(),
                 format!("type '{}' is not assignable to type '{}'", v_type, d_type),
             ));
         }
 
-        let mut typing = descriptor_typing.clone().or(value_typing.cloned()).unwrap();
+        let mut typing = annotation_typing.clone().or(value_typing.cloned()).unwrap();
 
-        if stmt.constant && (stmt.value.is_none() || typing.is_optional()) {
+        if stmt.constant && (stmt.value.is_none() || (typing.is_primitive() && typing.get_primitive().unwrap().optional)) {
             return Err(self
                 .err_fmt
                 .format(stmt.span, "constant cannot be undefined.".to_string()));
         }
 
-        if stmt.value.is_none() && !typing.is_optional() {
+        if stmt.value.is_none() && (typing.is_primitive() && !typing.get_primitive().unwrap().optional) {
             return Err(self.err_fmt.format(
                 stmt.span,
                 "non-optional variables cannot be undefined.".to_string(),
@@ -145,25 +145,19 @@ impl StatementVisitor<SemaStmtResult> for SemanticAnalyzer {
         }
 
         if typing.is_array() {
-            let mut descriptor_pointer_data: Option<PointerTypeData> = None;
-            let mut value_pointer_data: Option<PointerTypeData> = None;
+            let mut annotation_data: Option<usize> = None;
+            let mut value_data: Option<usize> = None;
 
-            if let Some(d) = descriptor_typing {
-                if let PointerType::Array(dt) = d.get_type_data().unwrap().pointer.clone().unwrap()
-                {
-                    descriptor_pointer_data = Some(dt);
-                }
+            if annotation_typing.clone().is_some_and(|t| t.is_array()) {
+                annotation_data = annotation_typing.unwrap().get_array().map(|a| a.capacity).unwrap_or(None);
             }
 
-            if let Some(d) = &value_typing {
-                if let PointerType::Array(dt) = d.get_type_data().unwrap().pointer.clone().unwrap()
-                {
-                    value_pointer_data = Some(dt);
-                }
+            if value_typing.is_some_and(|t| t.is_array()) {
+                value_data = value_typing.unwrap().get_array().map(|a| a.capacity).unwrap_or(None);
             }
 
-            if descriptor_pointer_data.clone().is_none_or(|pd| pd.capacity.is_none())
-                && value_pointer_data.clone().is_none_or(|pd| pd.capacity.is_none())
+            if annotation_data.clone().is_none()
+                && value_data.clone().is_none()
             {
                 return Err(self.err_fmt.format(
                     stmt.span,
@@ -171,14 +165,9 @@ impl StatementVisitor<SemaStmtResult> for SemanticAnalyzer {
                 ));
             }
 
-            let t = typing.get_mut_type_data().unwrap();
-            t.pointer = Some(PointerType::Array(
-                if descriptor_pointer_data.clone().is_some_and(|pd| pd.capacity.is_some()) {
-                    descriptor_pointer_data.unwrap()
-                } else {
-                    value_pointer_data.unwrap()
-                },
-            ));
+            let t = typing.get_mut_array().unwrap();
+            
+            t.capacity = annotation_data.or(value_data);
         }
 
         let scope = self.current_scope_mut();
@@ -250,7 +239,8 @@ impl ExpressionVisitor<SemaExprResult> for SemanticAnalyzer {
         &mut self,
         expr: &VariableAssignmentExpressionData,
     ) -> SemaExprResult {
-        let lvalue = self.analyze_left_value(&expr.left)?;
+        let left = self.visit_expr(&expr.left)?;
+        let lvalue = self.analyze_left_value(&left)?;
 
         if !lvalue.is_mutable() {
             return Err(self.err_fmt.format(
@@ -262,7 +252,7 @@ impl ExpressionVisitor<SemaExprResult> for SemanticAnalyzer {
         let value = self.visit_expr(&expr.right)?;
         let value_typing = value.get_typing().unwrap();
 
-        if !value_typing.is_compatible_with(lvalue.get_typing()) {
+        if !Type::compatible(value_typing, lvalue.get_typing()) {
             return Err(self.err_fmt.format(
                 expr.equal.span,
                 format!(
@@ -323,7 +313,7 @@ impl ExpressionVisitor<SemaExprResult> for SemanticAnalyzer {
 
             if expected_typing
                 .clone()
-                .is_some_and(|et| !current_typing.is_compatible_with(&et))
+                .is_some_and(|et| !Type::compatible(current_typing, &et))
             {
                 return Err(self.err_fmt.format(current_expr.get_span(), format!(
                     "the type of this array elements has been inferred as '{}', and type '{}' is not assignable to that.",
@@ -350,29 +340,27 @@ impl ExpressionVisitor<SemaExprResult> for SemanticAnalyzer {
                 .format(expr.span, "array type cannot be inferred.".to_string()));
         }
 
-        let pointer_type = PointerType::Array(PointerTypeData {
+        let pointer_type = Type::Array(ArrayType {
             capacity: Some(values.len()),
+            inner: Box::new(expected_typing.unwrap()),
             mutable: true,
-            nullable: false,
         });
-
-        let rest = expr.clone();
-
-        let mut expected_typing = expected_typing.unwrap();
-        let type_data = expected_typing.get_mut_type_data().unwrap();
-        type_data.pointer = Some(pointer_type);
 
         let data = ArrayLiteralExpressionData {
             values,
-            typing: Some(expected_typing),
-            ..rest
+            typing: Some(pointer_type),
+            ..expr.clone()
         };
 
         Ok(Expression::ArrayLiteral(data))
     }
 
     fn visit_array_access_expr(&mut self, expr: &ArrayAccessExpressionData) -> SemaExprResult {
-        let lvalue = self.analyze_left_value(&expr.left)?;
+
+        let left = self.visit_expr(&expr.left)?;
+        let lvalue = self.analyze_left_value(&left)?;
+
+        dbg!(lvalue.get_typing());
         if !lvalue.get_typing().is_array() {
             return Err(self.err_fmt.format(
                 expr.left.get_span(),
@@ -381,7 +369,7 @@ impl ExpressionVisitor<SemaExprResult> for SemanticAnalyzer {
         }
 
         let index = self.visit_expr(&expr.index)?;
-        let index_typing = index.get_typing().unwrap();
+        let index_typing = index.get_typing().unwrap().get_primitive().unwrap();
 
         if !index_typing.is_integer() {
             return Err(self.err_fmt.format(
@@ -393,14 +381,12 @@ impl ExpressionVisitor<SemaExprResult> for SemanticAnalyzer {
             ));
         }
 
-        let mut value_type = lvalue.get_typing().clone();
-        let type_data = value_type.get_mut_type_data().unwrap();
-        type_data.pointer = None;
-
+        let array_type = lvalue.get_typing().get_array().unwrap();
+        
         let data = ArrayAccessExpressionData {
             left: Box::new(self.visit_expr(&expr.left)?),
             index: Box::new(index),
-            typing: Some(value_type),
+            typing: Some(*array_type.inner),
             ..expr.clone()
         };
 
@@ -422,12 +408,11 @@ impl ExpressionVisitor<SemaExprResult> for SemanticAnalyzer {
             ));
         }
 
-        let mut t = base_type.clone();
-        t.get_mut_type_data().unwrap().pointer = None;
-
+        let ptr_type = base_type.get_pointer().unwrap();
+        
         let data = DereferenceExpressionData {
             identifier: Box::new(base),
-            typing: Some(t),
+            typing: Some(*ptr_type.inner),
             ..expr.clone()
         };
 
@@ -445,9 +430,9 @@ impl ExpressionVisitor<SemaExprResult> for SemanticAnalyzer {
             )
         })?;
 
-        let mut typing = symbol.typing;
+        let typing = symbol.typing;
 
-        if typing.is_null() || typing.is_undefined() || typing.is_pointer() {
+        if typing.is_null() || typing.is_undefined() {
             return Err(self.err_fmt.format(
                 expr.identifier.span,
                 format!("cannot create a reference to type: '{}'.", typing),
@@ -461,23 +446,22 @@ impl ExpressionVisitor<SemaExprResult> for SemanticAnalyzer {
             ));
         }
 
-        let type_is_array = typing.is_array();
-        let type_data = typing.get_mut_type_data().unwrap();
-        type_data.pointer = Some(match type_is_array {
-            true => PointerType::Fat(PointerTypeData {
-                capacity: None,
-                mutable: expr.mutable,
-                nullable: false,
-            }),
-            false => PointerType::Thin(PointerTypeData {
-                capacity: None,
-                mutable: expr.mutable,
-                nullable: false,
-            }),
+        
+        let ref_ptr_kind = if typing.is_array() { PointerTypeKind::Fat } else { PointerTypeKind::Thin };
+        let ref_ptr_cap = if typing.is_array() { typing.get_array().unwrap().capacity } else { None };
+
+        let typing = if typing.is_array() {
+            *typing.get_array().unwrap().inner
+        } else {
+            typing
+        };
+        
+        let ref_typing = Type::Pointer(PointerType{
+            kind: ref_ptr_kind, inner: Box::new(typing), capacity: ref_ptr_cap, mutable: expr.mutable, nullable: false
         });
 
         let data = ReferenceExpressionData {
-            typing: Some(typing),
+            typing: Some(ref_typing),
             ..expr.clone()
         };
 
@@ -531,7 +515,9 @@ impl SemanticAnalyzer {
     }
 
     pub fn analyze_left_value(&mut self, expr: &Expression) -> Result<LeftValue, String> {
-        match expr {
+
+        
+        match expr.clone() {
             Expression::Identifier(d) => {
                 let symbol = self.lookup(&d.value.lexeme).ok_or_else(|| {
                     self.err_fmt.format(
@@ -543,69 +529,23 @@ impl SemanticAnalyzer {
                 Ok(LeftValue::Variable(symbol))
             }
             Expression::Dereference(d) => {
-                let base = self.visit_expr(&d.identifier)?;
-                let base_type = base.get_typing().unwrap();
+                let ptr = d.identifier.get_typing().unwrap().get_pointer().unwrap();
 
-                if !base_type.is_pointer() {
-                    return Err(self.err_fmt.format(
-                        base.get_span(),
-                        "cannot dereference non-pointer type.".to_string(),
-                    ));
-                }
-
-                let ptr = base_type.get_type_data().unwrap().pointer.clone().unwrap();
-                let (pointee, mutable) = match ptr {
-                    PointerType::Thin(p) | PointerType::Fat(p) => {
-                        let mut t = base_type.clone();
-                        t.get_mut_type_data().unwrap().pointer = None;
-                        (t, p.mutable)
-                    }
-                    _ => unreachable!(),
-                };
+                dbg!(d.typing.clone());
 
                 Ok(LeftValue::Deref {
-                    base,
-                    typing: pointee,
-                    mutable,
+                    base: *d.identifier,
+                    typing: d.typing.unwrap(),
+                    mutable: ptr.mutable,
                 })
             }
             Expression::ArrayAccess(d) => {
-                let base = self.visit_expr(&d.left)?;
-                let base_type = base.get_typing().unwrap();
-
-                let index = self.visit_expr(&d.index)?;
-                let index_typing = index.get_typing().unwrap();
-
-                if !index_typing.is_integer() {
-                    return Err(self.err_fmt.format(
-                        index.get_span(),
-                        format!(
-                            "array index must be integer type, but received index of type '{}'.",
-                            index_typing
-                        ),
-                    ));
-                }
-
-                if !base_type.is_array() {
-                    return Err(self
-                        .err_fmt
-                        .format(base.get_span(), "cannot index non-array type".to_string()));
-                }
-
-                let ptr = base_type.get_type_data().unwrap().pointer.clone().unwrap();
-                let (pointee, mutable) = match ptr {
-                    PointerType::Array(p) => {
-                        let mut t = base_type.clone();
-                        t.get_mut_type_data().unwrap().pointer = None;
-                        (t, p.mutable)
-                    }
-                    _ => unreachable!(),
-                };
-
+                let arr = d.left.get_typing().unwrap().get_array().unwrap();
+                
                 Ok(LeftValue::ArrayAccess {
-                    base,
-                    typing: pointee,
-                    mutable,
+                    base: *d.left,
+                    typing: d.typing.unwrap(),
+                    mutable: arr.mutable,
                 })
             }
             _ => Err(self.err_fmt.format(
