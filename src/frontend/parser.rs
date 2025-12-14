@@ -318,11 +318,11 @@ impl Parser {
 
         let mutable = self.expect(TokenKind::Var).is_ok();
         
-        let identifier = self.parse_expr()?;
-        let span = identifier.get_span();
+        let identifier = self.expect(TokenKind::Identifier)?;
+        let span = identifier.span;
         
         let data = ReferenceExpressionData {
-            identifier: Box::new(identifier),
+            identifier,
             mutable,
             span,
             typing: None

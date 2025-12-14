@@ -45,30 +45,30 @@ impl Display for TokenKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             TokenKind::Eof => write!(f, "End of File"),
-            TokenKind::Const => write!(f, "const"),
-            TokenKind::Var => write!(f, "var"),
-            TokenKind::Begin => write!(f, "begin"),
-            TokenKind::End => write!(f, "end"),
+            TokenKind::Const => write!(f, "Const"),
+            TokenKind::Var => write!(f, "Var"),
+            TokenKind::Begin => write!(f, "Begin"),
+            TokenKind::End => write!(f, "End"),
             TokenKind::Integer => write!(f, "Integer"),
             TokenKind::Float => write!(f, "Float"),
             TokenKind::String => write!(f, "String"),
             TokenKind::Identifier => write!(f, "Identifier"),
-            TokenKind::Equal => write!(f, "="),
-            TokenKind::Colon => write!(f, ":"),
-            TokenKind::SemiColon => write!(f, ";"),
-            TokenKind::At => write!(f, "@"),
-            TokenKind::True => write!(f, "true"),
-            TokenKind::False => write!(f, "false"),
-            TokenKind::Undefined => write!(f, "undefined"),
-            TokenKind::Null => write!(f, "null"),
-            TokenKind::Question => write!(f, "?"),
-            TokenKind::Star => write!(f, "*"),
-            TokenKind::Ampersand => write!(f, "&"),
-            TokenKind::OpenParen => write!(f, "("),
-            TokenKind::CloseParen => write!(f, ")"),
-            TokenKind::OpenBrace => write!(f, "["),
-            TokenKind::CloseBrace => write!(f, "]"),
-            TokenKind::Comma => write!(f, ","),
+            TokenKind::Equal => write!(f, "Equal"),
+            TokenKind::Colon => write!(f, "Colon"),
+            TokenKind::SemiColon => write!(f, "SemiColon"),
+            TokenKind::At => write!(f, "At"),
+            TokenKind::True => write!(f, "True"),
+            TokenKind::False => write!(f, "False"),
+            TokenKind::Undefined => write!(f, "Undefined"),
+            TokenKind::Null => write!(f, "Null"),
+            TokenKind::Question => write!(f, "Question"),
+            TokenKind::Star => write!(f, "Star"),
+            TokenKind::Ampersand => write!(f, "Ampersand"),
+            TokenKind::OpenParen => write!(f, "OpenParen"),
+            TokenKind::CloseParen => write!(f, "CloseParen"),
+            TokenKind::OpenBrace => write!(f, "OpenBrace"),
+            TokenKind::CloseBrace => write!(f, "CloseBrace"),
+            TokenKind::Comma => write!(f, "Comma"),
         }
     }
 }
@@ -82,7 +82,7 @@ pub struct Token {
 
 impl Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:<12} '{}'", self.kind, self.lexeme)
+        write!(f, "'{}'", self.lexeme)
     }
 }
 
@@ -176,7 +176,8 @@ impl Type {
     }
 
     pub fn from_type_descriptor(descriptor: &TypeDescriptor) -> Option<Type> {
-        let pointer_type: Option<PointerType> = descriptor.pointer.clone().map(|pointer| match pointer {
+        let pointer_type: Option<PointerType> =
+            descriptor.pointer.clone().map(|pointer| match pointer {
                 Pointer::Thin(pointer_descriptor) => PointerType::Thin(PointerTypeData {
                     capacity: None,
                     mutable: pointer_descriptor.mutable,
@@ -188,7 +189,9 @@ impl Type {
                     nullable: pointer_descriptor.nullable,
                 }),
                 Pointer::Array(pointer_descriptor) => PointerType::Array(PointerTypeData {
-                    capacity: pointer_descriptor.capacity.map(|t| t.lexeme.parse::<usize>().unwrap()),
+                    capacity: pointer_descriptor
+                        .capacity
+                        .map(|t| t.lexeme.parse::<usize>().unwrap()),
                     mutable: pointer_descriptor.mutable,
                     nullable: pointer_descriptor.nullable,
                 }),
@@ -223,7 +226,10 @@ impl Type {
     }
 
     pub fn is_signed(&self) -> bool {
-        matches!(self, Type::Int8(_) | Type::Int16(_) | Type::Int32(_) | Type::Int64(_))
+        matches!(
+            self,
+            Type::Int8(_) | Type::Int16(_) | Type::Int32(_) | Type::Int64(_)
+        )
     }
 
     pub fn is_integer(&self) -> bool {
@@ -231,7 +237,10 @@ impl Type {
             return true;
         }
 
-        matches!(self, Type::UInt8(_) | Type::UInt16(_) | Type::UInt32(_) | Type::UInt64(_))
+        matches!(
+            self,
+            Type::UInt8(_) | Type::UInt16(_) | Type::UInt32(_) | Type::UInt64(_)
+        )
     }
 
     pub fn is_float(&self) -> bool {
@@ -302,7 +311,6 @@ impl Type {
         }
     }
 
-    
     pub fn get_mut_type_data(&mut self) -> Option<&mut TypeData> {
         match self {
             Type::Bool(type_data) => Some(type_data),
@@ -320,12 +328,12 @@ impl Type {
             _ => None,
         }
     }
-    
+
     pub fn is_array(&self) -> bool {
         self.get_type_data().is_some_and(|t| {
-            t.pointer.clone().is_some_and(|p| {
-                matches!(p, PointerType::Array(_))
-            })
+            t.pointer
+                .clone()
+                .is_some_and(|p| matches!(p, PointerType::Array(_)))
         })
     }
 
@@ -348,13 +356,12 @@ impl Type {
 
         if self.is_pointer() != other.is_pointer() {
             return false;
-        } 
+        }
 
         // only bool -> bool
         if self.is_bool() || other.is_bool() {
             return self.is_bool() && other.is_bool();
         }
-
 
         if self.is_undefined() && other.is_optional() {
             return true;
@@ -369,20 +376,44 @@ impl Type {
             return false;
         }
 
-        if self.is_pointer() && other.is_pointer() {
+        if (self.is_pointer() || self.is_array()) && (other.is_pointer() || other.is_array()) {
             let self_ptr = self.get_type_data().unwrap().pointer.clone().unwrap();
             let other_ptr = self.get_type_data().unwrap().pointer.clone().unwrap();
 
-            let mutable_case = |ap: &PointerTypeData, bp: &PointerTypeData| ap.mutable || !ap.mutable && !bp.mutable;
-            let nullable_case = |ap: &PointerTypeData, bp: &PointerTypeData| !ap.nullable || ap.nullable && bp.nullable;
-            
-            return match (self_ptr, other_ptr) {
-                (PointerType::Thin(ap), PointerType::Thin(bp)) => mutable_case(&ap, &bp) && nullable_case(&ap, &bp),
-                (PointerType::Thin(ap), PointerType::Fat(bp)) => mutable_case(&ap, &bp) && nullable_case(&ap, &bp),
-                (PointerType::Fat(ap), PointerType::Fat(bp)) => mutable_case(&ap, &bp) && nullable_case(&ap, &bp) && ap.capacity == bp.capacity,
-                (PointerType::Array(ap), PointerType::Array(bp)) => mutable_case(&ap, &bp) && nullable_case(&ap, &bp) && ap.capacity == bp.capacity,
-                _ => false
+            let mutable_case = |ap: &PointerTypeData, bp: &PointerTypeData| {
+                ap.mutable || !ap.mutable && !bp.mutable
+            };
+            let nullable_case = |ap: &PointerTypeData, bp: &PointerTypeData| {
+                !ap.nullable || ap.nullable && bp.nullable
+            };
+
+            let ptr_case = match (self_ptr, other_ptr) {
+                (PointerType::Thin(ap), PointerType::Thin(bp)) => {
+                    mutable_case(&ap, &bp) && nullable_case(&ap, &bp)
+                }
+                (PointerType::Thin(ap), PointerType::Fat(bp)) => {
+                    mutable_case(&ap, &bp) && nullable_case(&ap, &bp)
+                }
+                (PointerType::Fat(ap), PointerType::Fat(bp)) => {
+                    mutable_case(&ap, &bp) && nullable_case(&ap, &bp) && ap.capacity == bp.capacity
+                }
+                (PointerType::Array(ap), PointerType::Array(bp)) => {
+                    mutable_case(&ap, &bp) && nullable_case(&ap, &bp) && ap.capacity == bp.capacity
+                }
+                _ => false,
+            };
+
+            if !ptr_case {
+                return false;
             }
+
+            let mut at = self.clone();
+            let mut bt = self.clone();
+
+            at.get_mut_type_data().unwrap().pointer = None;
+            bt.get_mut_type_data().unwrap().pointer = None;
+
+            return at.is_compatible_with(&bt);
         }
 
         // Numerics
@@ -538,7 +569,7 @@ pub struct DereferenceExpressionData {
 
 #[derive(Clone, Debug)]
 pub struct ReferenceExpressionData {
-    pub identifier: Box<Expression>,
+    pub identifier: Token,
     pub mutable: bool,
     pub span: Span,
     pub typing: Option<Type>,
