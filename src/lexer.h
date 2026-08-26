@@ -3,27 +3,11 @@
 
 #include "libs/string_view.h"
 #include "libs/types.h"
-
-typedef enum {
-  TOKEN_KIND_LET,
-  TOKEN_KIND_CONST,
-  TOKEN_KIND_IDENTIFIER,
-  TOKEN_KIND_NUMBER,
-
-  TOKEN_KIND_SEMICOLON,
-  TOKEN_KIND_EQUAL,
-  
-  TOKEN_KIND_EOF
-} TokenKind;  
-
-typedef struct {
-  TokenKind kind;
-  StringView lexeme;
-} Token;
+#include "ast.h"
 
 typedef struct {
   u32 cursor;
-  StringView code;
+  StringView source;
 } Lexer;
 
 Lexer lexer_create(StringView source);

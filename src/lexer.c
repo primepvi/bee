@@ -5,37 +5,53 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-Lexer lexer_create(StringView source) {
-  return (Lexer){0, source};
-}
+static b32 lexer_str_predicate(int c) { return c != '"'; }
+
+Lexer lexer_create(StringView source) { return (Lexer){0, source}; }
 
 Token lexer_next_token(Lexer *l) {
-  StringView code = string_view_slice_start(l->code, l->cursor);
-  u32 whitespaces = string_view_trim_left(&code);
-  
-  l->cursor += whitespaces;
+  StringView code = string_view_slice_start(l->source, l->cursor);
+  StringView whitespaces =
+      string_view_slice_while(code, (StringViewPredicate)isspace);
+  code = string_view_slice_start(code, whitespaces.length);
+
+  l->cursor += whitespaces.length;
   if (!lexer_has_more_tokens(l)) {
-    return (Token){TOKEN_KIND_EOF, string_view_from_cstr("\0")};
+    return (Token){TOKEN_KIND_EOF, SV_LIT("\0")};
   }
 
-  StringView number = string_view_slice_while(code, (b8(*)(char))isdigit);
+  StringView number =
+      string_view_slice_while(code, (StringViewPredicate)isdigit);
   if (!string_view_is_empty(number)) {
     l->cursor += number.length;
     return (Token){TOKEN_KIND_NUMBER, number};
   }
 
-  StringView name = string_view_slice_while(code, (b8(*)(char))isalnum);
+  StringView name = string_view_slice_while(code, (StringViewPredicate)isalnum);
   if (!string_view_is_empty(name)) {
     TokenKind kind = TOKEN_KIND_IDENTIFIER;
-    
-    if (string_view_is_equal(name, string_view_from_cstr("let"))) {
+
+    if (string_view_is_equal(name, SV_LIT("let"))) {
       kind = TOKEN_KIND_LET;
-    } else if (string_view_is_equal(name, string_view_from_cstr("const"))) {
+    } else if (string_view_is_equal(name, SV_LIT("const"))) {
       kind = TOKEN_KIND_CONST;
     }
 
     l->cursor += name.length;
     return (Token){kind, name};
+  }
+
+  if (string_view_starts_with(code, SV_LIT("\""))) {
+    StringView lexeme = string_view_slice_while(
+        string_view_slice_start(code, 1), lexer_str_predicate);
+
+    if (string_view_at(code, lexeme.length + 1) != '"') {
+      fprintf(stderr, "ERROR: unterminated string has found in %u.", l->cursor);
+      exit(1);
+    }
+
+    l->cursor += lexeme.length + 2;
+    return (Token){TOKEN_KIND_STRING, lexeme};
   }
 
   TokenKind kind;
@@ -56,6 +72,4 @@ Token lexer_next_token(Lexer *l) {
   return (Token){kind, string_view_slice(code, 0, 1)};
 }
 
-b8 lexer_has_more_tokens(Lexer *l) {
-  return l->cursor < l->code.length;
-}
+b8 lexer_has_more_tokens(Lexer *l) { return l->cursor < l->source.length; }

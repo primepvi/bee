@@ -2,6 +2,7 @@
 #define BEE_STRING_VIEW_H
 
 #include "types.h"
+#include <string.h>
 
 typedef struct {
   const char *data;
@@ -10,17 +11,19 @@ typedef struct {
 
 #define SV_FMT "%.*s"
 #define SV_ARG(sv) (sv).length, (sv).data
+#define SV_LIT(data) (StringView){(data), strlen(data)}
 
-typedef b8 (*StringViewPredicate)(char cur);
+typedef b32 (*StringViewPredicate)(int cur);
 
 StringView string_view_create(const char *data, u32 length);
-StringView string_view_from_cstr(const char *data);
 StringView string_view_slice(StringView source, u32 start, u32 end);
 StringView string_view_slice_while(StringView source,
                                    StringViewPredicate predicate);
 StringView string_view_slice_start(StringView source, u32 count);
 
-const char *string_view_to_cstr(StringView view);
+char *string_view_to_cstr(StringView view);
+
+char string_view_at(StringView view, u32 index);
 
 b8 string_view_is_empty(StringView view);
 b8 string_view_is_equal(StringView a, StringView b);

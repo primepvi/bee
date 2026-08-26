@@ -1,16 +1,15 @@
+#include "ast.h"
+#include "libs/string_view.h"
+#include "parser.h"
 #include <stdio.h>
 
-#include "lexer.h"
-#include "libs/string_view.h"
-
 int main(void) {
-  StringView code = string_view_from_cstr("let age = 18;");
-  Lexer lexer = lexer_create(code);
+  StringView source = SV_LIT("const name = \"John Doe\";\n"
+                             "const age = 18;");
 
-  while (lexer_has_more_tokens(&lexer)) {
-    Token current = lexer_next_token(&lexer);
-    printf("TOKEN: "SV_FMT"\n", SV_ARG(current.lexeme));
-  }
-  
-  return 0;  
-}  
+  Parser parser = parser_create(source);
+  Program program = parser_parse(&parser);
+  ast_print(&program);
+
+  return 0;
+}
