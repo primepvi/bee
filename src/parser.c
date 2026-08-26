@@ -1,6 +1,7 @@
 #include "parser.h"
 #include "ast.h"
 #include "lexer.h"
+#include "libs/array_list.h"
 #include "libs/string_view.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -127,18 +128,11 @@ Parser parser_create(StringView source) {
 }
 
 Program parser_parse(Parser *parser) {
-  u32 stmts_length = 0;
-  u32 stmts_capacity = 32;
-  Stmt *stmts = malloc(sizeof(Stmt) * stmts_capacity);
-
+  ArrayList *stmts = array_list_new(32, sizeof(Stmt));
   while (parser->current_token.kind != TOKEN_KIND_EOF) {
-    if (stmts_length >= stmts_capacity) {
-      stmts_capacity *= 2;
-      stmts = realloc(stmts, sizeof(Stmt) * stmts_capacity);
-    }
-
-    stmts[stmts_length++] = parser_parse_stmt(parser);
+    Stmt stmt = parser_parse_stmt(parser);
+    array_list_push(stmts, &stmt);
   }
 
-  return (Program){stmts, stmts_length, stmts_capacity};
+  return (Program){stmts};
 }

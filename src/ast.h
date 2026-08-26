@@ -3,6 +3,7 @@
 
 #include "libs/types.h"
 #include "libs/string_view.h"
+#include "libs/array_list.h"
 
 typedef enum {
   TOKEN_KIND_LET,
@@ -90,8 +91,7 @@ typedef struct Stmt {
 } Stmt;
 
 typedef struct {
-  Stmt *stmts;
-  u32 stmts_length, stmts_capacity;
+  ArrayList *stmts;
 } Program;
 
 void ast_print(const Program *program);

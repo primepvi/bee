@@ -1,4 +1,5 @@
 #include "ast.h"
+#include "libs/array_list.h"
 #include <stdio.h>
 
 const char *const TOKEN_NAMES[TOKEN_KIND_KEY_COUNT] = {
@@ -103,7 +104,7 @@ void ast_print(const Program *program) {
 
   printf("Program\n");
 
-  for (u32 i = 0; i < program->stmts_length; ++i) {
-    ast_print_stmt(&program->stmts[i], 1);
+  for (u32 i = 0; i < array_list_length(program->stmts); i++) {
+    ast_print_stmt(array_list_at(program->stmts, i), 1);
   }
 }
