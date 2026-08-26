@@ -35,9 +35,8 @@ LiteralExpr parser_parse_literal_expr(Parser *parser) {
     break;
   }
   case TOKEN_KIND_STRING: {
-    const char *buffer = string_view_to_cstr(token.lexeme);
     expr.kind = LITERAL_KIND_STRING;
-    expr.as.string = buffer;
+    expr.as.string = token.lexeme;
     break;
   }
   default: {
@@ -49,6 +48,15 @@ LiteralExpr parser_parse_literal_expr(Parser *parser) {
   return expr;
 }
 
+AssignmentExpr parser_parse_assignment_expr(Parser *parser, Token identifier) {
+  parser_expect_token(parser, TOKEN_KIND_EQUAL);
+  Expr aux = parser_parse_expr(parser);
+  Expr *value = malloc(sizeof(Expr));
+  memcpy(value, &aux, sizeof(Expr));
+
+  return (AssignmentExpr){.identifier = identifier.lexeme, .value = value};
+}
+
 Expr parser_parse_expr(Parser *parser) {
   Expr expr = {0};
   switch (parser->current_token.kind) {
@@ -56,6 +64,17 @@ Expr parser_parse_expr(Parser *parser) {
   case TOKEN_KIND_STRING: {
     expr.kind = EXPR_KIND_LITERAL;
     expr.as.literal = parser_parse_literal_expr(parser);
+    break;
+  }
+  case TOKEN_KIND_IDENTIFIER: {
+    Token identifier = parser_eat_token(parser);
+    if (parser->current_token.kind == TOKEN_KIND_EQUAL) {
+      expr.kind = EXPR_KIND_ASSIGNMENT;
+      expr.as.assignment = parser_parse_assignment_expr(parser, identifier);
+    } else {
+      expr.kind = EXPR_KIND_IDENTIFIER;
+      expr.as.identifier = (IdentifierExpr){identifier.lexeme};
+    }
     break;
   }
   default: {
@@ -74,8 +93,6 @@ VariableDeclStmt parser_parse_variable_decl_stmt(Parser *parser) {
   parser_expect_token(parser, TOKEN_KIND_EQUAL);
 
   Expr value = parser_parse_expr(parser);
-  parser_expect_token(parser, TOKEN_KIND_SEMICOLON);
-
   return (VariableDeclStmt){
       .identifier = identifier.lexeme, .is_const = is_const, .value = value};
 }
@@ -91,9 +108,9 @@ Stmt parser_parse_stmt(Parser *parser) {
     break;
   }
   default: {
-    fprintf(stderr, "ERROR: unexpected token found during stmt parsing: %s\n",
-            TOKEN_NAMES[parser->current_token.kind]);
-    exit(1);
+    Expr expr = parser_parse_expr(parser);
+    stmt.kind = STMT_KIND_EXPR;
+    stmt.as.expr = (ExprStmt){expr};
   }
   }
 

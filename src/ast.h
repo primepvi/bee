@@ -26,8 +26,13 @@ typedef struct {
 
 extern const char *const TOKEN_NAMES[TOKEN_KIND_KEY_COUNT];
 
+typedef struct Expr Expr;
+typedef struct Stmt Stmt;
+
 typedef enum {
   EXPR_KIND_LITERAL,
+  EXPR_KIND_IDENTIFIER,
+  EXPR_KIND_ASSIGNMENT,  
 } ExprKind;
 
 typedef enum {
@@ -39,19 +44,31 @@ typedef struct {
   LiteralKind kind;
   union {
     i64 integer;
-    const char *string;
+    StringView string;
   } as;
 } LiteralExpr;
 
 typedef struct {
+  StringView name;
+} IdentifierExpr;
+
+typedef struct {
+  StringView identifier;
+  Expr *value;
+} AssignmentExpr;
+
+typedef struct Expr {
   ExprKind kind;
   union {
     LiteralExpr literal;
+    IdentifierExpr identifier;
+    AssignmentExpr assignment;
   } as;
 } Expr;
 
 typedef enum {
   STMT_KIND_VARIABLE_DECL,
+  STMT_KIND_EXPR,
 } StmtKind;
 
 typedef struct {
@@ -61,9 +78,14 @@ typedef struct {
 } VariableDeclStmt;
 
 typedef struct {
+  Expr expr;
+} ExprStmt;  
+
+typedef struct Stmt {
   StmtKind kind;
   union {
     VariableDeclStmt variable_decl;
+    ExprStmt expr;
   } as;
 } Stmt;
 

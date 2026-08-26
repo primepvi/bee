@@ -4,8 +4,9 @@
 #include <stdio.h>
 
 int main(void) {
-  StringView source = SV_LIT("const name = \"John Doe\";\n"
-                             "const age = 18;");
+  StringView source = SV_LIT("const name = \"John\"\n"
+                             "name = \"Carlos\"");
+  printf(SV_FMT"\n\n", SV_ARG(source));
 
   Parser parser = parser_create(source);
   Program program = parser_parse(&parser);

@@ -29,23 +29,38 @@ static void ast_print_expr(const Expr *expr, u32 depth) {
   switch (expr->kind) {
   case EXPR_KIND_LITERAL: {
     const LiteralExpr *literal = &expr->as.literal;
-
     printf("Literal\n");
-
+    
     print_indent(depth + 1);
-
     switch (literal->kind) {
     case LITERAL_KIND_INTEGER:
       printf("Integer: %lld\n", literal->as.integer);
       break;
 
     case LITERAL_KIND_STRING:
-      printf("String: \"%s\"\n", literal->as.string);
+      printf("String: \""SV_FMT"\"\n", SV_ARG(literal->as.string));
       break;
     }
 
     break;
   }
+  case EXPR_KIND_IDENTIFIER: {
+    const IdentifierExpr *identifier = &expr->as.identifier;
+    printf("Identifier: " SV_FMT "\n", SV_ARG(identifier->name));
+    break;
+  }
+  case EXPR_KIND_ASSIGNMENT: {
+    const AssignmentExpr *assignment = &expr->as.assignment;
+    printf("Assignment\n");
+    
+    print_indent(depth + 1);
+    printf("Identifier: " SV_FMT "\n", SV_ARG(assignment->identifier));
+
+    print_indent(depth + 1);
+    printf("Value: \n");
+    ast_print_expr(assignment->value, depth + 2);
+    break;
+  }    
   }
 }
 
@@ -60,7 +75,6 @@ static void ast_print_stmt(const Stmt *stmt, u32 depth) {
   switch (stmt->kind) {
   case STMT_KIND_VARIABLE_DECL: {
     const VariableDeclStmt *decl = &stmt->as.variable_decl;
-
     printf("VariableDeclaration (%s)\n", decl->is_const ? "const" : "let");
 
     print_indent(depth + 1);
@@ -70,9 +84,14 @@ static void ast_print_stmt(const Stmt *stmt, u32 depth) {
     printf("Value\n");
 
     ast_print_expr(&decl->value, depth + 2);
-
     break;
   }
+  case STMT_KIND_EXPR: {
+    const ExprStmt *expr = &stmt->as.expr;
+    printf("ExprStmt\n");
+    ast_print_expr(&expr->expr, depth + 1);
+    break;
+  }    
   }
 }
 

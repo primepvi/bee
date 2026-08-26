@@ -13,4 +13,8 @@ typedef struct {
 Parser parser_create(StringView source);
 Program parser_parse(Parser *parser);
 
+Token parser_eat_token(Parser *parser);
+Expr parser_parse_expr(Parser *parser);
+Stmt parser_parse_stmt(Parser *parser);
+
 #endif // BEE_PARSER_H
