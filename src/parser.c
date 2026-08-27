@@ -25,29 +25,7 @@ Token parser_expect_token(Parser *parser, TokenKind kind) {
 }
 
 LiteralExpr parser_parse_literal_expr(Parser *parser) {
-  LiteralExpr expr = {0};
-
-  Token token = parser_eat_token(parser);
-  switch (token.kind) {
-  case TOKEN_KIND_NUMBER: {
-    char *buffer = string_view_to_cstr(token.lexeme);
-    expr.kind = LITERAL_KIND_INTEGER;
-    expr.as.integer = atoi(buffer);
-    free(buffer);
-    break;
-  }
-  case TOKEN_KIND_STRING: {
-    expr.kind = LITERAL_KIND_STRING;
-    expr.as.string = token.lexeme;
-    break;
-  }
-  default: {
-    fprintf(stderr, "ERROR: unreachable (parser_parse_literal_expr).");
-    exit(1);
-  }
-  }
-
-  return expr;
+  return (LiteralExpr){parser_eat_token(parser)};
 }
 
 AssignmentExpr parser_parse_assignment_expr(Parser *parser, Token identifier) {
@@ -128,6 +106,12 @@ VariableDeclStmt parser_parse_variable_decl_stmt(Parser *parser) {
       .identifier = identifier.lexeme, .is_const = is_const, .value = value};
 }
 
+EchoStmt parser_parse_echo_stmt(Parser *parser) {
+  parser_eat_token(parser);
+  Expr message = parser_parse_expr(parser);  
+  return (EchoStmt){message};
+}  
+
 Stmt parser_parse_stmt(Parser *parser) {
   Stmt stmt = {0};
 
@@ -138,6 +122,11 @@ Stmt parser_parse_stmt(Parser *parser) {
     stmt.as.variable_decl = parser_parse_variable_decl_stmt(parser);
     break;
   }
+  case TOKEN_KIND_ECHO: {
+    stmt.kind = STMT_KIND_ECHO;
+    stmt.as.echo = parser_parse_echo_stmt(parser);
+    break;
+  }    
   default: {
     Expr expr = parser_parse_expr(parser);
     stmt.kind = STMT_KIND_EXPR;

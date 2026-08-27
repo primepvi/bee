@@ -7,8 +7,8 @@
 static u64 hashmap_hash(StringView key) {
   u64 hash = 14695981039346656037ULL;
 
-  while (*key.data) {
-    hash ^= (u8)*key.data++;
+  for (u32 i = 0; i < key.length; i++) {
+    hash ^= (u8)key.data[i];
     hash *= 1099511628211ULL;
   }
 

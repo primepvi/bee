@@ -8,6 +8,7 @@
 typedef enum {
   TOKEN_KIND_LET,
   TOKEN_KIND_CONST,
+  TOKEN_KIND_ECHO,
   TOKEN_KIND_IDENTIFIER,
 
   TOKEN_KIND_NUMBER,
@@ -43,17 +44,8 @@ typedef enum {
   EXPR_KIND_BINARY,
 } ExprKind;
 
-typedef enum {
-  LITERAL_KIND_INTEGER,
-  LITERAL_KIND_STRING,  
-} LiteralKind;
-
 typedef struct {
-  LiteralKind kind;
-  union {
-    i64 integer;
-    StringView string;
-  } as;
+  Token value;
 } LiteralExpr;
 
 typedef struct {
@@ -83,6 +75,7 @@ typedef struct Expr {
 typedef enum {
   STMT_KIND_VARIABLE_DECL,
   STMT_KIND_EXPR,
+  STMT_KIND_ECHO,
 } StmtKind;
 
 typedef struct {
@@ -93,13 +86,18 @@ typedef struct {
 
 typedef struct {
   Expr expr;
-} ExprStmt;  
+} ExprStmt;
+
+typedef struct {
+  Expr message;
+} EchoStmt;
 
 typedef struct Stmt {
   StmtKind kind;
   union {
     VariableDeclStmt variable_decl;
     ExprStmt expr;
+    EchoStmt echo;
   } as;
 } Stmt;
 

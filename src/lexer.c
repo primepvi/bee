@@ -36,6 +36,8 @@ Token lexer_next_token(Lexer *l) {
       kind = TOKEN_KIND_LET;
     } else if (string_view_is_equal(name, SV_LIT("const"))) {
       kind = TOKEN_KIND_CONST;
+    } else if (string_view_is_equal(name, SV_LIT("echo"))) {
+      kind = TOKEN_KIND_ECHO;
     }
 
     l->cursor += name.length;
