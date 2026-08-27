@@ -5,13 +5,12 @@ A tiny language written in C.
 ```js
 let a = 10
 let b = 20
-let result = a + b - a * 3
 
-echo result
+echo a + b
 ```
 
 ## Build
 ```console
 $ make
-$ ./build/bee
+$ ./build/bee examples/hello.bee
 ```
