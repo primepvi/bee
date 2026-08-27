@@ -51,29 +51,27 @@ typedef enum {
 } ExprKind;
 
 typedef struct {
-  Token value;
-  Span span;
+  Token value_token;
 } LiteralExpr;
 
 typedef struct {
-  StringView name;
-  Span span;
+  Token identifier_token;
 } IdentifierExpr;
 
 typedef struct {
-  StringView identifier;
+  Token identifier_token;
+  Token assignment_token;
   Expr *value;
-  Span span;
 } AssignmentExpr;
 
 typedef struct {
   Expr *left, *right;
   Token operator_token;
-  Span span;
 } BinaryExpr;
 
 typedef struct Expr {
   ExprKind kind;
+  Span span;
   union {
     LiteralExpr literal;
     IdentifierExpr identifier;
@@ -89,20 +87,19 @@ typedef enum {
 } StmtKind;
 
 typedef struct {
-  StringView identifier;
+  Token keyword_token;
+  Token identifier_token;
+  Token assignment_token;
   Expr value;
-  b8 is_const;
-  Span span;
 } VariableDeclStmt;
 
 typedef struct {
   Expr expr;
-  Span span;
 } ExprStmt;
 
 typedef struct {
+  Token keyword_token;
   Expr message;
-  Span span;
 } EchoStmt;
 
 typedef struct Stmt {
@@ -112,6 +109,7 @@ typedef struct Stmt {
     ExprStmt expr;
     EchoStmt echo;
   } as;
+  Span span;
 } Stmt;
 
 typedef struct {

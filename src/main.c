@@ -17,7 +17,7 @@ int main(int argc, char **argv) {
   Program program = parser_parse(&parser);
   ast_print(&program);
 
-  Interpreter interpreter = interpreter_create(&program);
+  Interpreter interpreter = interpreter_create(&source, &program);
   interpreter_eval(&interpreter);
 
   return 0;

@@ -1,1 +1,2 @@
-echo "Hello, World"
+const message = "Hello, World"
+echo message

@@ -36,12 +36,12 @@ static void ast_print_expr(const Expr *expr, u32 depth) {
   switch (expr->kind) {
   case EXPR_KIND_LITERAL: {
     const LiteralExpr *literal = &expr->as.literal;
-    printf("Literal: " SV_FMT "\n", SV_ARG(literal->value.lexeme));
+    printf("Literal: " SV_FMT "\n", SV_ARG(literal->value_token.lexeme));
     break;
   }
   case EXPR_KIND_IDENTIFIER: {
     const IdentifierExpr *identifier = &expr->as.identifier;
-    printf("Identifier: " SV_FMT "\n", SV_ARG(identifier->name));
+    printf("Identifier: " SV_FMT "\n", SV_ARG(identifier->identifier_token.lexeme));
     break;
   }
   case EXPR_KIND_ASSIGNMENT: {
@@ -49,7 +49,7 @@ static void ast_print_expr(const Expr *expr, u32 depth) {
     printf("Assignment\n");
 
     print_indent(depth + 1);
-    printf("Identifier: " SV_FMT "\n", SV_ARG(assignment->identifier));
+    printf("Identifier: " SV_FMT "\n", SV_ARG(assignment->identifier_token.lexeme));
 
     print_indent(depth + 1);
     printf("Value: \n");
@@ -86,10 +86,10 @@ static void ast_print_stmt(const Stmt *stmt, u32 depth) {
   switch (stmt->kind) {
   case STMT_KIND_VARIABLE_DECL: {
     const VariableDeclStmt *decl = &stmt->as.variable_decl;
-    printf("VariableDeclaration (%s)\n", decl->is_const ? "const" : "let");
+    printf("VariableDeclaration ("SV_FMT")\n", SV_ARG(decl->keyword_token.lexeme));
 
     print_indent(depth + 1);
-    printf("Identifier: " SV_FMT "\n", SV_ARG(decl->identifier));
+    printf("Identifier: " SV_FMT "\n", SV_ARG(decl->identifier_token.lexeme));
 
     print_indent(depth + 1);
     printf("Value\n");

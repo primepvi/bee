@@ -2,15 +2,16 @@
 #include "ast.h"
 #include "libs/array_list.h"
 #include "libs/env.h"
+#include "libs/error.h"
 #include "libs/string_view.h"
 #include <stdio.h>
 #include <stdlib.h>
 
-Interpreter interpreter_create(Program *program) {
+Interpreter interpreter_create(Source *source, Program *program) {
   Interpreter interpreter = {0};
+  interpreter.source = source;
   interpreter.program = program;
   interpreter.global_env = env_create(NULL);
-
   return interpreter;
 }
 
@@ -28,20 +29,23 @@ void interpreter_eval_expr_stmt(Interpreter *interpreter, ExprStmt *stmt) {
 
 void interpreter_eval_variable_decl_stmt(Interpreter *interpreter,
                                          VariableDeclStmt *stmt) {
-  if (env_has(&interpreter->global_env, stmt->identifier)) {
-    fprintf(stderr, "ERROR: Variable " SV_FMT " is already declared.\n",
-            SV_ARG(stmt->identifier));
-    exit(1);
+  if (env_has(&interpreter->global_env, stmt->identifier_token.lexeme)) {
+    ErrorContext ctx = {.source = interpreter->source,
+                        .span = stmt->identifier_token.span};
+    error_throw_fmt(&ctx, "variable " SV_FMT " is already declared.",
+                    SV_ARG(stmt->identifier_token.lexeme));
   }
 
   Value value = interpreter_eval_expr(interpreter, &stmt->value);
   EnvEntry entry = {0};
   entry.kind = ENV_ENTRY_KIND_VARIABLE;
-  entry.as.variable = (EnvVariable){.constant = stmt->is_const,
-                                    .identifier = stmt->identifier,
-                                    .value = value};
+  entry.as.variable =
+      (EnvVariable){.constant = string_view_is_equal(stmt->keyword_token.lexeme,
+                                                     SV_LIT("const")),
+                    .identifier = stmt->identifier_token.lexeme,
+                    .value = value};
 
-  env_set(&interpreter->global_env, stmt->identifier, entry);
+  env_set(&interpreter->global_env, stmt->identifier_token.lexeme, entry);
 }
 
 void interpreter_eval_echo_stmt(Interpreter *interpreter, EchoStmt *stmt) {
@@ -79,9 +83,9 @@ void interpreter_eval_stmt(Interpreter *interpreter, Stmt *stmt) {
 Value interpreter_eval_literal_expr(Interpreter *interpreter,
                                     LiteralExpr *expr) {
   Value value = {0};
-  switch (expr->value.kind) {
+  switch (expr->value_token.kind) {
   case TOKEN_KIND_NUMBER: {
-    char *buffer = string_view_to_cstr(expr->value.lexeme);
+    char *buffer = string_view_to_cstr(expr->value_token.lexeme);
     value.kind = VALUE_KIND_INTEGER;
     value.as.integer = atoi(buffer);
     free(buffer);
@@ -89,7 +93,7 @@ Value interpreter_eval_literal_expr(Interpreter *interpreter,
   }
   case TOKEN_KIND_STRING: {
     value.kind = VALUE_KIND_STRING;
-    value.as.string = expr->value.lexeme;
+    value.as.string = expr->value_token.lexeme;
     break;
   }
   default: {
@@ -103,27 +107,32 @@ Value interpreter_eval_literal_expr(Interpreter *interpreter,
 
 Value interpreter_eval_assignment_expr(Interpreter *interpreter,
                                        AssignmentExpr *expr) {
-  EnvEntry *entry = env_get(&interpreter->global_env, expr->identifier);
+  EnvEntry *entry =
+      env_get(&interpreter->global_env, expr->identifier_token.lexeme);
   if (entry == NULL) {
-    fprintf(stderr,
-            "ERROR: attempt to assign to a non-declared variable: " SV_FMT "\n",
-            SV_ARG(expr->identifier));
-    exit(1);
+    ErrorContext ctx = {
+        .source = interpreter->source,
+        .span = expr->identifier_token.span,
+    };
+    error_throw_fmt(&ctx, "attempt to assign a undefined variable: " SV_FMT ".",
+                    SV_ARG(expr->identifier_token.lexeme));
   }
 
   if (entry->kind != ENV_ENTRY_KIND_VARIABLE) {
-    fprintf(stderr,
-            "ERROR: invalid assignment: " SV_FMT "\n",
-            SV_ARG(expr->identifier));
-    exit(1);
+    ErrorContext ctx = {.source = interpreter->source,
+                        .span = expr->identifier_token.span};
+    error_throw_fmt(&ctx, "attempt to assign an non-variable: " SV_FMT ".",
+                    SV_ARG(expr->identifier_token.lexeme));
   }
 
   EnvVariable *variable = &entry->as.variable;
   if (variable->constant) {
-    fprintf(stderr,
-            "ERROR: attempt to reassign the constant: " SV_FMT "\n",
-            SV_ARG(expr->identifier));
-    exit(1);
+    ErrorContext ctx = {
+        .source = interpreter->source,
+        .span = expr->assignment_token.span,
+    };
+    error_throw_fmt(&ctx, "attempt to reassign a constant variable: " SV_FMT ".",
+                    SV_ARG(expr->identifier_token.lexeme));
   }
 
   Value value = interpreter_eval_expr(interpreter, expr->value);
@@ -133,12 +142,14 @@ Value interpreter_eval_assignment_expr(Interpreter *interpreter,
 
 Value interpreter_eval_identifier_expr(Interpreter *interpreter,
                                        IdentifierExpr *expr) {
-  EnvEntry *entry = env_get(&interpreter->global_env, expr->name);
+  EnvEntry *entry =
+      env_get(&interpreter->global_env, expr->identifier_token.lexeme);
   if (entry == NULL) {
-    fprintf(stderr,
-            "ERROR: attempt to access an undefined identifier: " SV_FMT "\n",
-            SV_ARG(expr->name));
-    exit(1);
+    ErrorContext ctx = {.source = interpreter->source,
+                        .span = expr->identifier_token.span};
+    error_throw_fmt(&ctx,
+                    "attempt to access a undefined identifier: " SV_FMT ".",
+                    SV_ARG(expr->identifier_token.lexeme));
   }
 
   switch (entry->kind) {
@@ -146,18 +157,30 @@ Value interpreter_eval_identifier_expr(Interpreter *interpreter,
     return entry->as.variable.value;
   default:
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_identifier_expr).\n");
-    exit(1);    
+    exit(1);
   }
 }
 
 Value interpreter_eval_binary_expr(Interpreter *interpreter, BinaryExpr *expr) {
   Value left = interpreter_eval_expr(interpreter, expr->left);
-  Value right = interpreter_eval_expr(interpreter, expr->right);  
-  if (left.kind != VALUE_KIND_INTEGER || right.kind != VALUE_KIND_INTEGER) {
-    fprintf(stderr, "ERROR: invalid operands in binary expr.\n");
-    exit(1);
+  Value right = interpreter_eval_expr(interpreter, expr->right);
+
+  if (left.kind != VALUE_KIND_INTEGER) {
+    ErrorContext ctx = {.source = interpreter->source,
+                        .span = expr->left->span};
+    error_throw(
+        &ctx,
+        "attempt to perform a binary operation with non-integer operand.");
   }
 
+  if (right.kind != VALUE_KIND_INTEGER) {
+    ErrorContext ctx = {.source = interpreter->source,
+                        .span = expr->right->span};
+    error_throw(
+        &ctx,
+        "attempt to perform a binary operation with non-integer operand.");
+  }
+  
   Value value = {0};
   value.kind = VALUE_KIND_INTEGER;
   value.as.integer = 0;
@@ -174,23 +197,24 @@ Value interpreter_eval_binary_expr(Interpreter *interpreter, BinaryExpr *expr) {
     break;
   case TOKEN_KIND_SLASH: {
     if (right.as.integer == 0) {
-      fprintf(stderr, "ERROR: division by zero.\n");
-      exit(1);
+      ErrorContext ctx = {.source = interpreter->source,
+                          .span = expr->right->span};
+      error_throw(&ctx, "attempt divide by zero.");
     }
-    
+
     value.as.integer = left.as.integer / right.as.integer;
     break;
-  }    
+  }
   case TOKEN_KIND_PERCENTAGE:
     value.as.integer = left.as.integer % right.as.integer;
-    break;    
+    break;
   default:
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_binary_expr).\n");
     exit(1);
   }
 
   return value;
-}  
+}
 
 Value interpreter_eval_expr(Interpreter *interpreter, Expr *expr) {
   switch (expr->kind) {
@@ -205,6 +229,5 @@ Value interpreter_eval_expr(Interpreter *interpreter, Expr *expr) {
   default:
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_expr).\n");
     exit(1);
-  }    
-}  
-
+  }
+}
