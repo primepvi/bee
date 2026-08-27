@@ -5,6 +5,7 @@
 #include "libs/string_view.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 Token parser_eat_token(Parser *parser) {
   Token eated = parser->current_token;
@@ -58,7 +59,7 @@ AssignmentExpr parser_parse_assignment_expr(Parser *parser, Token identifier) {
   return (AssignmentExpr){.identifier = identifier.lexeme, .value = value};
 }
 
-Expr parser_parse_expr(Parser *parser) {
+Expr parser_parse_primary_expr(Parser *parser) {
   Expr expr = {0};
   switch (parser->current_token.kind) {
   case TOKEN_KIND_NUMBER:
@@ -87,6 +88,35 @@ Expr parser_parse_expr(Parser *parser) {
 
   return expr;
 }
+
+Expr parser_parse_binary_expr(Parser *parser, u32 priority) {
+  Expr left = parser_parse_primary_expr(parser);
+
+  while (true) {
+    u32 op_priority = ast_binary_operator_priority(parser->current_token.kind);
+    if (op_priority == 0 || op_priority <= priority) {
+      break;
+    }
+
+    BinaryExpr expr = {0};
+    expr.operator_token = parser_eat_token(parser);
+    expr.left = malloc(sizeof(Expr));
+    expr.right = malloc(sizeof(Expr));
+    
+    Expr right = parser_parse_binary_expr(parser, op_priority);
+    memcpy(expr.right, &right, sizeof(Expr));
+    memcpy(expr.left, &left, sizeof(Expr));
+    
+    left.kind = EXPR_KIND_BINARY;
+    left.as.binary = expr;
+  }
+
+  return left;
+}
+
+Expr parser_parse_expr(Parser *parser) {
+  return parser_parse_binary_expr(parser, 0);
+}  
 
 VariableDeclStmt parser_parse_variable_decl_stmt(Parser *parser) {
   b8 is_const = parser_eat_token(parser).kind == TOKEN_KIND_CONST;

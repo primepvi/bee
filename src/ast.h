@@ -9,12 +9,18 @@ typedef enum {
   TOKEN_KIND_LET,
   TOKEN_KIND_CONST,
   TOKEN_KIND_IDENTIFIER,
-  
+
   TOKEN_KIND_NUMBER,
   TOKEN_KIND_STRING,
 
   TOKEN_KIND_SEMICOLON,
   TOKEN_KIND_EQUAL,
+
+  TOKEN_KIND_PLUS,
+  TOKEN_KIND_MINUS,
+  TOKEN_KIND_STAR,
+  TOKEN_KIND_SLASH,
+  TOKEN_KIND_PERCENTAGE,
   
   TOKEN_KIND_EOF,  
   TOKEN_KIND_KEY_COUNT,
@@ -33,7 +39,8 @@ typedef struct Stmt Stmt;
 typedef enum {
   EXPR_KIND_LITERAL,
   EXPR_KIND_IDENTIFIER,
-  EXPR_KIND_ASSIGNMENT,  
+  EXPR_KIND_ASSIGNMENT,
+  EXPR_KIND_BINARY,
 } ExprKind;
 
 typedef enum {
@@ -58,12 +65,18 @@ typedef struct {
   Expr *value;
 } AssignmentExpr;
 
+typedef struct {
+  Expr *left, *right;
+  Token operator_token;
+} BinaryExpr;
+
 typedef struct Expr {
   ExprKind kind;
   union {
     LiteralExpr literal;
     IdentifierExpr identifier;
     AssignmentExpr assignment;
+    BinaryExpr binary;
   } as;
 } Expr;
 
@@ -95,5 +108,6 @@ typedef struct {
 } Program;
 
 void ast_print(const Program *program);
+u32 ast_binary_operator_priority(TokenKind kind);
 
 #endif // BEE_AST_H

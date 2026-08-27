@@ -1,4 +1,5 @@
 #include "lexer.h"
+#include "ast.h"
 #include "libs/string_view.h"
 
 #include <ctype.h>
@@ -62,6 +63,21 @@ Token lexer_next_token(Lexer *l) {
   case ';':
     kind = TOKEN_KIND_SEMICOLON;
     break;
+  case '+':
+    kind = TOKEN_KIND_PLUS;
+    break;    
+  case '-':
+    kind = TOKEN_KIND_MINUS;
+    break;
+  case '*':
+    kind = TOKEN_KIND_STAR;
+    break;
+  case '/':
+    kind = TOKEN_KIND_SLASH;
+    break;
+  case '%':
+    kind = TOKEN_KIND_PERCENTAGE;
+    break;    
   default:
     fprintf(stderr, "ERROR: Invalid char found during lexing: %c\n",
             code.data[0]);

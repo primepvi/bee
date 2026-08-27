@@ -4,9 +4,11 @@
 #include <stdio.h>
 
 int main(void) {
-  StringView source = SV_LIT("const name = \"John\"\n"
-                             "name = \"Carlos\"");
-  printf(SV_FMT"\n\n", SV_ARG(source));
+  StringView source = SV_LIT("let a = 10\n"
+                             "let b = 20\n"
+                             "let result = a + b * 10 / 5\n");
+
+  printf(SV_FMT "\n\n", SV_ARG(source));
 
   Parser parser = parser_create(source);
   Program program = parser_parse(&parser);
