@@ -3,14 +3,15 @@
 
 #include "ast.h"
 #include "lexer.h"
+#include "libs/source.h"
 
 typedef struct {
-  StringView source;
+  Source *source;
   Lexer lexer;  
   Token current_token;
 } Parser;
 
-Parser parser_create(StringView source);
+Parser parser_create(Source *source);
 Program parser_parse(Parser *parser);
 
 Token parser_eat_token(Parser *parser);

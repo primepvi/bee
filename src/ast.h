@@ -5,6 +5,11 @@
 #include "libs/string_view.h"
 #include "libs/array_list.h"
 
+typedef struct {
+  u32 line;
+  u32 start, end;
+} Span;
+
 typedef enum {
   TOKEN_KIND_LET,
   TOKEN_KIND_CONST,
@@ -30,6 +35,7 @@ typedef enum {
 typedef struct {
   TokenKind kind;
   StringView lexeme;
+  Span span;
 } Token;
 
 extern const char *const TOKEN_NAMES[TOKEN_KIND_KEY_COUNT];
@@ -46,20 +52,24 @@ typedef enum {
 
 typedef struct {
   Token value;
+  Span span;
 } LiteralExpr;
 
 typedef struct {
   StringView name;
+  Span span;
 } IdentifierExpr;
 
 typedef struct {
   StringView identifier;
   Expr *value;
+  Span span;
 } AssignmentExpr;
 
 typedef struct {
   Expr *left, *right;
   Token operator_token;
+  Span span;
 } BinaryExpr;
 
 typedef struct Expr {
@@ -82,14 +92,17 @@ typedef struct {
   StringView identifier;
   Expr value;
   b8 is_const;
+  Span span;
 } VariableDeclStmt;
 
 typedef struct {
   Expr expr;
+  Span span;
 } ExprStmt;
 
 typedef struct {
   Expr message;
+  Span span;
 } EchoStmt;
 
 typedef struct Stmt {

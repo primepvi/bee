@@ -1,5 +1,5 @@
 CC := gcc
-CFLAGS := -Wall -Wextra
+CFLAGS := -Wall -Wextra -g -O0
 
 SRCS := $(shell find src -name "*.c")
 OBJS := $(patsubst src/%.c,build/%.o,$(SRCS))

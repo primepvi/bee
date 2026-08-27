@@ -2,6 +2,7 @@
 #define BEE_STRING_VIEW_H
 
 #include "types.h"
+#include "array_list.h"
 #include <string.h>
 
 typedef struct {
@@ -22,7 +23,6 @@ StringView string_view_slice_while(StringView source,
 StringView string_view_slice_start(StringView source, u32 count);
 
 char *string_view_to_cstr(StringView view);
-
 char string_view_at(StringView view, u32 index);
 
 b8 string_view_is_empty(StringView view);
@@ -37,5 +37,7 @@ u32 string_view_trim(StringView *view);
 u32 string_view_chop_while(StringView *view, StringViewPredicate predicate);
 u32 string_view_chop_left(StringView *view, u32 count);
 u32 string_view_chop_right(StringView *view, u32 count);
+
+ArrayList *string_view_split_by_char(StringView view, char c);
 
 #endif // BEE_STRING_VIEW_H

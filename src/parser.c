@@ -2,6 +2,7 @@
 #include "ast.h"
 #include "lexer.h"
 #include "libs/array_list.h"
+#include "libs/error.h"
 #include "libs/string_view.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,7 +17,7 @@ Token parser_eat_token(Parser *parser) {
 Token parser_expect_token(Parser *parser, TokenKind kind) {
   Token current = parser_eat_token(parser);
   if (current.kind != kind) {
-    fprintf(stderr, "ERROR: expected token kind %s, but received %s.\n",
+    fprintf(stderr, "expected token kind %s, but received %s.\n",
             TOKEN_NAMES[kind], TOKEN_NAMES[current.kind]);
     exit(1);
   }
@@ -137,10 +138,10 @@ Stmt parser_parse_stmt(Parser *parser) {
   return stmt;
 }
 
-Parser parser_create(StringView source) {
+Parser parser_create(Source *source) {
   Parser parser = {0};
+  parser.source = source;  
   parser.lexer = lexer_create(source);
-  parser.source = source;
   parser.current_token = lexer_next_token(&parser.lexer);
 
   return parser;

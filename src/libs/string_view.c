@@ -1,4 +1,5 @@
 #include "string_view.h"
+#include "array_list.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -7,7 +8,7 @@ StringView string_view_create(const char *data, u32 length) {
 }
 
 StringView string_view_slice(StringView source, u32 start, u32 end) {
-  return string_view_create(source.data + start, end);
+  return string_view_create(source.data + start, end - start);
 }
 
 StringView string_view_slice_while(StringView source,
@@ -110,4 +111,23 @@ u32 string_view_chop_right(StringView *view, u32 count) {
   view->length -= count;
 
   return count;
+}
+
+ArrayList *string_view_split_by_char(StringView view, char c) {
+    ArrayList *result = array_list_new(25, sizeof(StringView));
+
+    u32 start = 0;
+    for (u32 cursor = 0; cursor < view.length; cursor++) {
+        if (view.data[cursor] == c) {
+	  StringView slice = string_view_slice(view, start, cursor);
+            array_list_push(result, &slice);
+
+            start = cursor + 1;
+        }
+    }
+
+    StringView slice = string_view_slice(view, start, view.length);
+    array_list_push(result, &slice);
+
+    return result;
 }
