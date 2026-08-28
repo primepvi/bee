@@ -72,6 +72,12 @@ Token lexer_next_token(Lexer *l) {
       kind = TOKEN_KIND_TRUE;
     } else if (string_view_is_equal(name, SV_LIT("false"))) {
       kind = TOKEN_KIND_FALSE;
+    } else if (string_view_is_equal(name, SV_LIT("and"))) {
+      kind = TOKEN_KIND_AND;
+    } else if (string_view_is_equal(name, SV_LIT("or"))) {
+      kind = TOKEN_KIND_OR;
+    } else if (string_view_is_equal(name, SV_LIT("not"))) {
+      kind = TOKEN_KIND_NOT;
     }
 
     l->cursor += name.length;

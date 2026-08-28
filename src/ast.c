@@ -7,6 +7,9 @@ const char *const TOKEN_NAMES[TOKEN_KIND_KEY_COUNT] = {
     [TOKEN_KIND_CONST] = "Const",
     [TOKEN_KIND_ECHO] = "Echo",
     [TOKEN_KIND_TRUE] = "True",
+    [TOKEN_KIND_AND] = "And",
+    [TOKEN_KIND_OR] = "Or",
+    [TOKEN_KIND_NOT] = "Not",
     [TOKEN_KIND_FALSE] = "False",
     [TOKEN_KIND_IDENTIFIER] = "Identifier",
     [TOKEN_KIND_NUMBER] = "Number",
@@ -82,6 +85,22 @@ static void ast_print_expr(const Expr *expr, u32 depth) {
     ast_print_expr(binary->right, depth + 2);
     break;
   }
+  case EXPR_KIND_LOGICAL: {
+    const LogicalExpr *logical = &expr->as.logical;
+    printf("Logical\n");
+
+    print_indent(depth + 1);
+    printf("Operator: %s\n", TOKEN_NAMES[logical->operator_token.kind]);
+
+    print_indent(depth + 1);
+    printf("Left\n");
+    ast_print_expr(logical->left, depth + 2);
+
+    print_indent(depth + 1);
+    printf("Right\n");
+    ast_print_expr(logical->right, depth + 2);
+    break;
+  }    
   case EXPR_KIND_PARENTHESIZED: {
     const ParenthesizedExpr *parenthesized = &expr->as.parenthesized;
     printf("Parenthesized\n");
@@ -160,6 +179,7 @@ u32 ast_unary_operator_priority(TokenKind kind) {
   switch (kind) {
   case TOKEN_KIND_PLUS:
   case TOKEN_KIND_MINUS:
+  case TOKEN_KIND_NOT:    
     return 4;
 
   default:

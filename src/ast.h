@@ -16,6 +16,9 @@ typedef enum {
   TOKEN_KIND_ECHO,
   TOKEN_KIND_TRUE,
   TOKEN_KIND_FALSE,
+  TOKEN_KIND_AND,
+  TOKEN_KIND_OR,  
+  TOKEN_KIND_NOT,
   TOKEN_KIND_IDENTIFIER,  
 
   TOKEN_KIND_NUMBER,
@@ -58,6 +61,7 @@ typedef enum {
   EXPR_KIND_IDENTIFIER,
   EXPR_KIND_ASSIGNMENT,
   EXPR_KIND_BINARY,
+  EXPR_KIND_LOGICAL,
   EXPR_KIND_UNARY,
   EXPR_KIND_PARENTHESIZED,
 } ExprKind;
@@ -82,6 +86,11 @@ typedef struct {
 } BinaryExpr;
 
 typedef struct {
+  Expr *left, *right;
+  Token operator_token;
+} LogicalExpr;
+
+typedef struct {
   Token operator_token;
   Expr *operand;
 } UnaryExpr;
@@ -100,6 +109,7 @@ typedef struct Expr {
     IdentifierExpr identifier;
     AssignmentExpr assignment;
     BinaryExpr binary;
+    LogicalExpr logical;
     UnaryExpr unary;
     ParenthesizedExpr parenthesized;
   } as;

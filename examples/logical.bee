@@ -12,3 +12,6 @@ echo a != b
 
 echo true
 echo false
+
+echo not (a == b) and a <= b
+echo b == a or b > a

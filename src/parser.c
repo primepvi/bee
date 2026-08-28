@@ -58,10 +58,11 @@ ParenthesizedExpr parser_parse_parenthesized_expr(Parser *parser) {
     ErrorContext ctx = {.source = parser->source,
                         .span = parser->current_token.span};
 
-    error_throw_fmt(&ctx,
-                    "unterminated parenthesized expression has found, expects ')' but "
-                    "received '" SV_FMT "'.",
-                    SV_ARG(parser->current_token.lexeme));
+    error_throw_fmt(
+        &ctx,
+        "unterminated parenthesized expression has found, expects ')' but "
+        "received '" SV_FMT "'.",
+        SV_ARG(parser->current_token.lexeme));
   }
 
   Token close_paren_token = parser_eat_token(parser);
@@ -74,7 +75,7 @@ Expr parser_parse_primary_expr(Parser *parser) {
   Expr expr = {0};
   switch (parser->current_token.kind) {
   case TOKEN_KIND_TRUE:
-  case TOKEN_KIND_FALSE:    
+  case TOKEN_KIND_FALSE:
   case TOKEN_KIND_NUMBER:
   case TOKEN_KIND_STRING: {
     LiteralExpr literal = parser_parse_literal_expr(parser);
@@ -140,12 +141,10 @@ Expr parser_parse_binary_expr(Parser *parser, u32 priority) {
     Expr operand = parser_parse_binary_expr(parser, unary_op_priority);
     memcpy(unary.operand, &operand, sizeof(Expr));
 
-    Span span = {
-      .line = unary.operator_token.span.line,
-      .start = unary.operator_token.span.start,
-      .end = operand.span.end
-    };
-    
+    Span span = {.line = unary.operator_token.span.line,
+                 .start = unary.operator_token.span.start,
+                 .end = operand.span.end};
+
     left.kind = EXPR_KIND_UNARY;
     left.as.unary = unary;
     left.span = span;
@@ -180,8 +179,36 @@ Expr parser_parse_binary_expr(Parser *parser, u32 priority) {
   return left;
 }
 
+Expr parser_parse_logical_expr(Parser *parser) {
+  Expr left = parser_parse_binary_expr(parser, 0);
+
+  if (parser_match_token(parser, TOKEN_KIND_AND) ||
+      parser_match_token(parser, TOKEN_KIND_OR)) {
+    LogicalExpr expr = {0};
+    expr.operator_token = parser_eat_token(parser);
+    expr.left = malloc(sizeof(Expr));
+    expr.right = malloc(sizeof(Expr));
+
+    Expr right = parser_parse_logical_expr(parser);
+    memcpy(expr.left, &left, sizeof(Expr));
+    memcpy(expr.right, &right, sizeof(Expr));
+
+    Span span = {
+      .line = left.span.line,
+      .start = left.span.start,
+      .end = right.span.end
+    };      
+
+    left.kind = EXPR_KIND_LOGICAL;
+    left.as.logical = expr;
+    left.span = span;
+  }
+
+  return left;
+}
+
 Expr parser_parse_expr(Parser *parser) {
-  return parser_parse_binary_expr(parser, 0);
+  return parser_parse_logical_expr(parser);
 }
 
 VariableDeclStmt parser_parse_variable_decl_stmt(Parser *parser) {

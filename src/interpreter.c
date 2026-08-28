@@ -105,7 +105,7 @@ Value interpreter_eval_literal_expr(Interpreter *interpreter,
     value.as.boolean =
         string_view_is_equal(expr->value_token.lexeme, SV_LIT("true"));
     break;
-  }    
+  }
   default: {
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_literal_expr).\n");
     exit(1);
@@ -176,20 +176,18 @@ Value interpreter_eval_binary_expr(Interpreter *interpreter, BinaryExpr *expr) {
   Value left = interpreter_eval_expr(interpreter, expr->left);
   Value right = interpreter_eval_expr(interpreter, expr->right);
 
-  if (left.kind != VALUE_KIND_INTEGER && left.kind != VALUE_KIND_BOOLEAN) {
+  if (left.kind == VALUE_KIND_STRING) {
     ErrorContext ctx = {.source = interpreter->source,
                         .span = expr->left->span};
-    error_throw(
-        &ctx,
-        "attempt to perform a binary operation with a string operand.");
+    error_throw(&ctx,
+                "attempt to perform a binary operation with a string operand.");
   }
 
-  if (right.kind != VALUE_KIND_INTEGER && right.kind != VALUE_KIND_BOOLEAN) {
+  if (right.kind == VALUE_KIND_STRING) {
     ErrorContext ctx = {.source = interpreter->source,
                         .span = expr->right->span};
-    error_throw(
-        &ctx,
-        "attempt to perform a binary operation with a string operand.");
+    error_throw(&ctx,
+                "attempt to perform a binary operation with a string operand.");
   }
 
   Value value = {0};
@@ -218,7 +216,7 @@ Value interpreter_eval_binary_expr(Interpreter *interpreter, BinaryExpr *expr) {
     break;
   }
   case TOKEN_KIND_PERCENTAGE:
-    value.kind = VALUE_KIND_INTEGER;    
+    value.kind = VALUE_KIND_INTEGER;
     value.as.integer = left.as.integer % right.as.integer;
     break;
   case TOKEN_KIND_GT:
@@ -253,20 +251,76 @@ Value interpreter_eval_binary_expr(Interpreter *interpreter, BinaryExpr *expr) {
   return value;
 }
 
+Value interpreter_eval_logical_expr(Interpreter *interpreter,
+                                    LogicalExpr *expr) {
+  Value left = interpreter_eval_expr(interpreter, expr->left);
+  Value right = interpreter_eval_expr(interpreter, expr->right);
+
+  if (left.kind != VALUE_KIND_BOOLEAN) {
+    ErrorContext ctx = {.source = interpreter->source,
+                        .span = expr->left->span};
+    error_throw(
+        &ctx,
+        "attempt to perform a logical operation with a non-boolean operand.");
+  }
+
+  if (right.kind != VALUE_KIND_BOOLEAN) {
+    ErrorContext ctx = {.source = interpreter->source,
+                        .span = expr->right->span};
+    error_throw(
+        &ctx,
+        "attempt to perform a logical operation with a non-boolean operand.");
+  }
+
+  Value value = {0};
+  value.kind = VALUE_KIND_BOOLEAN;
+
+  switch (expr->operator_token.kind) {
+  case TOKEN_KIND_AND:
+    value.as.boolean = left.as.boolean && right.as.boolean;
+    break;
+  case TOKEN_KIND_OR:
+    value.as.boolean = left.as.boolean || right.as.boolean;
+    break;
+  default:
+    fprintf(stderr, "ERROR: unreachable (interpreter_eval_logical_expr).\n");
+    exit(1);
+  }
+
+  return value;
+}
+
 Value interpreter_eval_unary_expr(Interpreter *interpreter, UnaryExpr *unary) {
   Value value = interpreter_eval_expr(interpreter, unary->operand);
-  if (value.kind != VALUE_KIND_INTEGER) {
-    ErrorContext ctx = {.source = interpreter->source,
-                        .span = unary->operand->span};
-    error_throw(&ctx, "unary operand must be a integer.");
-  }
 
   switch (unary->operator_token.kind) {
   case TOKEN_KIND_MINUS: {
+    if (value.kind != VALUE_KIND_INTEGER) {
+      ErrorContext ctx = {.source = interpreter->source,
+                          .span = unary->operand->span};
+      error_throw(&ctx, "unary operand for operator '-' must be a integer.");
+    }
+
     value.as.integer *= -1;
     break;
   }
   case TOKEN_KIND_PLUS: {
+    if (value.kind != VALUE_KIND_INTEGER) {
+      ErrorContext ctx = {.source = interpreter->source,
+                          .span = unary->operand->span};
+      error_throw(&ctx, "unary operand for operator '+' must be a integer.");
+    }
+    
+    break;
+  }
+  case TOKEN_KIND_NOT: {
+    if (value.kind != VALUE_KIND_BOOLEAN) {
+      ErrorContext ctx = {.source = interpreter->source,
+                          .span = unary->operand->span};
+      error_throw(&ctx, "unary operand for operator 'not' must be a boolean.");
+    }
+    
+    value.as.boolean = !value.as.boolean;
     break;
   }
   default: {
@@ -289,6 +343,8 @@ Value interpreter_eval_expr(Interpreter *interpreter, Expr *expr) {
     return interpreter_eval_identifier_expr(interpreter, &expr->as.identifier);
   case EXPR_KIND_BINARY:
     return interpreter_eval_binary_expr(interpreter, &expr->as.binary);
+  case EXPR_KIND_LOGICAL:
+    return interpreter_eval_logical_expr(interpreter, &expr->as.logical);
   case EXPR_KIND_PARENTHESIZED:
     return interpreter_eval_expr(interpreter, expr->as.parenthesized.expr);
   case EXPR_KIND_UNARY:
