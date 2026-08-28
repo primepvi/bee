@@ -48,6 +48,28 @@ AssignmentExpr parser_parse_assignment_expr(Parser *parser,
   };
 }
 
+ParenthesizedExpr parser_parse_parenthesized_expr(Parser *parser) {
+  Token open_paren_token = parser_eat_token(parser);
+  Expr aux_expr = parser_parse_expr(parser);
+  Expr *expr = malloc(sizeof(Expr));
+  memcpy(expr, &aux_expr, sizeof(Expr));
+
+  if (!parser_match_token(parser, TOKEN_KIND_CLOSE_PAREN)) {
+    ErrorContext ctx = {.source = parser->source,
+                        .span = parser->current_token.span};
+
+    error_throw_fmt(&ctx,
+                    "unterminated parenthesized expression has found, expects ')' but "
+                    "received '" SV_FMT "'.",
+                    SV_ARG(parser->current_token.lexeme));
+  }
+
+  Token close_paren_token = parser_eat_token(parser);
+  return (ParenthesizedExpr){.open_paren_token = open_paren_token,
+                             .close_paren_token = close_paren_token,
+                             .expr = expr};
+}
+
 Expr parser_parse_primary_expr(Parser *parser) {
   Expr expr = {0};
   switch (parser->current_token.kind) {
@@ -57,6 +79,19 @@ Expr parser_parse_primary_expr(Parser *parser) {
     expr.kind = EXPR_KIND_LITERAL;
     expr.as.literal = literal;
     expr.span = literal.value_token.span;
+    break;
+  }
+  case TOKEN_KIND_OPEN_PAREN: {
+    ParenthesizedExpr parenthesized = parser_parse_parenthesized_expr(parser);
+    Span span = {
+        .line = parenthesized.open_paren_token.span.line,
+        .start = parenthesized.open_paren_token.span.start,
+        .end = parenthesized.close_paren_token.span.end,
+    };
+
+    expr.kind = EXPR_KIND_PARENTHESIZED;
+    expr.as.parenthesized = parenthesized;
+    expr.span = span;
     break;
   }
   case TOKEN_KIND_IDENTIFIER: {
@@ -92,7 +127,29 @@ Expr parser_parse_primary_expr(Parser *parser) {
 }
 
 Expr parser_parse_binary_expr(Parser *parser, u32 priority) {
-  Expr left = parser_parse_primary_expr(parser);
+  u32 unary_op_priority =
+      ast_unary_operator_priority(parser->current_token.kind);
+  Expr left;
+  if (unary_op_priority != 0 && unary_op_priority >= priority) {
+    UnaryExpr unary = {0};
+    unary.operator_token = parser_eat_token(parser);
+    unary.operand = malloc(sizeof(Expr));
+
+    Expr operand = parser_parse_binary_expr(parser, unary_op_priority);
+    memcpy(unary.operand, &operand, sizeof(Expr));
+
+    Span span = {
+      .line = unary.operator_token.span.line,
+      .start = unary.operator_token.span.start,
+      .end = operand.span.end
+    };
+    
+    left.kind = EXPR_KIND_UNARY;
+    left.as.unary = unary;
+    left.span = span;
+  } else {
+    left = parser_parse_primary_expr(parser);
+  }
 
   while (true) {
     u32 op_priority = ast_binary_operator_priority(parser->current_token.kind);
@@ -109,12 +166,10 @@ Expr parser_parse_binary_expr(Parser *parser, u32 priority) {
     memcpy(expr.right, &right, sizeof(Expr));
     memcpy(expr.left, &left, sizeof(Expr));
 
-    Span span = {
-      .line = expr.left->span.line,
-      .start = expr.left->span.start,
-      .end = expr.right->span.end
-    };
-    
+    Span span = {.line = expr.left->span.line,
+                 .start = expr.left->span.start,
+                 .end = expr.right->span.end};
+
     left.kind = EXPR_KIND_BINARY;
     left.as.binary = expr;
     left.span = span;

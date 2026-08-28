@@ -131,7 +131,8 @@ Value interpreter_eval_assignment_expr(Interpreter *interpreter,
         .source = interpreter->source,
         .span = expr->assignment_token.span,
     };
-    error_throw_fmt(&ctx, "attempt to reassign a constant variable: " SV_FMT ".",
+    error_throw_fmt(&ctx,
+                    "attempt to reassign a constant variable: " SV_FMT ".",
                     SV_ARG(expr->identifier_token.lexeme));
   }
 
@@ -180,7 +181,7 @@ Value interpreter_eval_binary_expr(Interpreter *interpreter, BinaryExpr *expr) {
         &ctx,
         "attempt to perform a binary operation with non-integer operand.");
   }
-  
+
   Value value = {0};
   value.kind = VALUE_KIND_INTEGER;
   value.as.integer = 0;
@@ -216,6 +217,32 @@ Value interpreter_eval_binary_expr(Interpreter *interpreter, BinaryExpr *expr) {
   return value;
 }
 
+Value interpreter_eval_unary_expr(Interpreter *interpreter, UnaryExpr *unary) {
+  Value value = interpreter_eval_expr(interpreter, unary->operand);
+  if (value.kind != VALUE_KIND_INTEGER) {
+    ErrorContext ctx = {.source = interpreter->source,
+                        .span = unary->operand->span};
+    error_throw(&ctx, "unary operand must be a integer.");
+  }
+
+  switch (unary->operator_token.kind) {
+  case TOKEN_KIND_MINUS: {
+    value.as.integer *= -1;
+    break;
+  }
+  case TOKEN_KIND_PLUS: {
+    break;
+  }
+  default: {
+    ErrorContext ctx = {.source = interpreter->source,
+                        .span = unary->operator_token.span};
+    error_throw(&ctx, "invalid unary operator, expects '-' or '+'.");
+  }
+  }
+
+  return value;
+}
+
 Value interpreter_eval_expr(Interpreter *interpreter, Expr *expr) {
   switch (expr->kind) {
   case EXPR_KIND_LITERAL:
@@ -226,6 +253,10 @@ Value interpreter_eval_expr(Interpreter *interpreter, Expr *expr) {
     return interpreter_eval_identifier_expr(interpreter, &expr->as.identifier);
   case EXPR_KIND_BINARY:
     return interpreter_eval_binary_expr(interpreter, &expr->as.binary);
+  case EXPR_KIND_PARENTHESIZED:
+    return interpreter_eval_expr(interpreter, expr->as.parenthesized.expr);
+  case EXPR_KIND_UNARY:
+    return interpreter_eval_unary_expr(interpreter, &expr->as.unary);
   default:
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_expr).\n");
     exit(1);

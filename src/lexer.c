@@ -115,6 +115,12 @@ Token lexer_next_token(Lexer *l) {
   case '%':
     kind = TOKEN_KIND_PERCENTAGE;
     break;
+  case '(':
+    kind = TOKEN_KIND_OPEN_PAREN;
+    break;
+  case ')':
+    kind = TOKEN_KIND_CLOSE_PAREN;
+    break;
   default: {
     ErrorContext ctx = {.source = l->source, .span = span};
     error_throw_fmt(&ctx, "unexpected char has found: %c", string_view_at(code, 0));

@@ -11,6 +11,8 @@ const char *const TOKEN_NAMES[TOKEN_KIND_KEY_COUNT] = {
     [TOKEN_KIND_STRING] = "String",
     [TOKEN_KIND_SEMICOLON] = "Semi Colon",
     [TOKEN_KIND_EQUAL] = "Equal",
+    [TOKEN_KIND_OPEN_PAREN] = "Open Paren",
+    [TOKEN_KIND_CLOSE_PAREN] = "Close Paren",
     [TOKEN_KIND_PLUS] = "Plus",
     [TOKEN_KIND_MINUS] = "Minus",
     [TOKEN_KIND_STAR] = "Star",
@@ -72,6 +74,27 @@ static void ast_print_expr(const Expr *expr, u32 depth) {
     ast_print_expr(binary->right, depth + 2);
     break;
   }
+  case EXPR_KIND_PARENTHESIZED: {
+    const ParenthesizedExpr *parenthesized = &expr->as.parenthesized;
+    printf("Parenthesized\n");
+
+    print_indent(depth + 1);
+    printf("Expr\n");
+    ast_print_expr(parenthesized->expr, depth + 2);
+    break;
+  }
+  case EXPR_KIND_UNARY: {
+    const UnaryExpr *unary = &expr->as.unary;
+    printf("Unary\n");
+
+    print_indent(depth + 1);
+    printf("Operator: %s\n", TOKEN_NAMES[unary->operator_token.kind]);
+
+    print_indent(depth + 1);
+    printf("Operand\n");
+    ast_print_expr(unary->operand, depth + 2);
+    break;
+  }    
   }
 }
 
@@ -122,6 +145,17 @@ void ast_print(const Program *program) {
 
   for (u32 i = 0; i < array_list_length(program->stmts); i++) {
     ast_print_stmt(array_list_at(program->stmts, i), 1);
+  }
+}
+
+u32 ast_unary_operator_priority(TokenKind kind) {
+  switch (kind) {
+  case TOKEN_KIND_PLUS:
+  case TOKEN_KIND_MINUS:
+    return 3;
+
+  default:
+    return 0;
   }
 }
 
