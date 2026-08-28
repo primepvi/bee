@@ -73,6 +73,8 @@ ParenthesizedExpr parser_parse_parenthesized_expr(Parser *parser) {
 Expr parser_parse_primary_expr(Parser *parser) {
   Expr expr = {0};
   switch (parser->current_token.kind) {
+  case TOKEN_KIND_TRUE:
+  case TOKEN_KIND_FALSE:    
   case TOKEN_KIND_NUMBER:
   case TOKEN_KIND_STRING: {
     LiteralExpr literal = parser_parse_literal_expr(parser);

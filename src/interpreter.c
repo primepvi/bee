@@ -57,6 +57,9 @@ void interpreter_eval_echo_stmt(Interpreter *interpreter, EchoStmt *stmt) {
   case VALUE_KIND_STRING:
     printf(SV_FMT "\n", SV_ARG(value.as.string));
     break;
+  case VALUE_KIND_BOOLEAN:
+    printf("%s\n", value.as.boolean ? "true" : "false");
+    break;
   default:
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_echo_stmt).\n");
     exit(1);
@@ -96,6 +99,13 @@ Value interpreter_eval_literal_expr(Interpreter *interpreter,
     value.as.string = expr->value_token.lexeme;
     break;
   }
+  case TOKEN_KIND_TRUE:
+  case TOKEN_KIND_FALSE: {
+    value.kind = VALUE_KIND_BOOLEAN;
+    value.as.boolean =
+        string_view_is_equal(expr->value_token.lexeme, SV_LIT("true"));
+    break;
+  }    
   default: {
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_literal_expr).\n");
     exit(1);
@@ -166,34 +176,34 @@ Value interpreter_eval_binary_expr(Interpreter *interpreter, BinaryExpr *expr) {
   Value left = interpreter_eval_expr(interpreter, expr->left);
   Value right = interpreter_eval_expr(interpreter, expr->right);
 
-  if (left.kind != VALUE_KIND_INTEGER) {
+  if (left.kind != VALUE_KIND_INTEGER && left.kind != VALUE_KIND_BOOLEAN) {
     ErrorContext ctx = {.source = interpreter->source,
                         .span = expr->left->span};
     error_throw(
         &ctx,
-        "attempt to perform a binary operation with non-integer operand.");
+        "attempt to perform a binary operation with a string operand.");
   }
 
-  if (right.kind != VALUE_KIND_INTEGER) {
+  if (right.kind != VALUE_KIND_INTEGER && right.kind != VALUE_KIND_BOOLEAN) {
     ErrorContext ctx = {.source = interpreter->source,
                         .span = expr->right->span};
     error_throw(
         &ctx,
-        "attempt to perform a binary operation with non-integer operand.");
+        "attempt to perform a binary operation with a string operand.");
   }
 
   Value value = {0};
-  value.kind = VALUE_KIND_INTEGER;
-  value.as.integer = 0;
-
   switch (expr->operator_token.kind) {
   case TOKEN_KIND_PLUS:
+    value.kind = VALUE_KIND_INTEGER;
     value.as.integer = left.as.integer + right.as.integer;
     break;
   case TOKEN_KIND_MINUS:
+    value.kind = VALUE_KIND_INTEGER;
     value.as.integer = left.as.integer - right.as.integer;
     break;
   case TOKEN_KIND_STAR:
+    value.kind = VALUE_KIND_INTEGER;
     value.as.integer = left.as.integer * right.as.integer;
     break;
   case TOKEN_KIND_SLASH: {
@@ -203,11 +213,37 @@ Value interpreter_eval_binary_expr(Interpreter *interpreter, BinaryExpr *expr) {
       error_throw(&ctx, "attempt divide by zero.");
     }
 
+    value.kind = VALUE_KIND_INTEGER;
     value.as.integer = left.as.integer / right.as.integer;
     break;
   }
   case TOKEN_KIND_PERCENTAGE:
+    value.kind = VALUE_KIND_INTEGER;    
     value.as.integer = left.as.integer % right.as.integer;
+    break;
+  case TOKEN_KIND_GT:
+    value.kind = VALUE_KIND_BOOLEAN;
+    value.as.boolean = left.as.integer > right.as.integer;
+    break;
+  case TOKEN_KIND_GTE:
+    value.kind = VALUE_KIND_BOOLEAN;
+    value.as.boolean = left.as.integer >= right.as.integer;
+    break;
+  case TOKEN_KIND_LT:
+    value.kind = VALUE_KIND_BOOLEAN;
+    value.as.boolean = left.as.integer < right.as.integer;
+    break;
+  case TOKEN_KIND_LTE:
+    value.kind = VALUE_KIND_BOOLEAN;
+    value.as.boolean = left.as.integer <= right.as.integer;
+    break;
+  case TOKEN_KIND_EQEQ:
+    value.kind = VALUE_KIND_BOOLEAN;
+    value.as.boolean = left.as.integer == right.as.integer;
+    break;
+  case TOKEN_KIND_NEQ:
+    value.kind = VALUE_KIND_BOOLEAN;
+    value.as.boolean = left.as.integer != right.as.integer;
     break;
   default:
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_binary_expr).\n");

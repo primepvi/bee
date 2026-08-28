@@ -1,0 +1,14 @@
+let a = 10
+let b = 15
+
+echo a > b
+echo a >= b
+
+echo a < b
+echo a <= b
+
+echo a == b
+echo a != b
+
+echo true
+echo false

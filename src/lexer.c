@@ -36,7 +36,7 @@ Token lexer_next_token(Lexer *l) {
   if (!lexer_has_more_tokens(l)) {
     return (Token){TOKEN_KIND_EOF, SV_LIT("\0"), lexer_make_span(l, 0)};
   }
-  
+
   StringView code = string_view_slice_start(source, l->cursor);
   StringView whitespaces =
       string_view_slice_while(code, (StringViewPredicate)isspace);
@@ -68,6 +68,10 @@ Token lexer_next_token(Lexer *l) {
       kind = TOKEN_KIND_CONST;
     } else if (string_view_is_equal(name, SV_LIT("echo"))) {
       kind = TOKEN_KIND_ECHO;
+    } else if (string_view_is_equal(name, SV_LIT("true"))) {
+      kind = TOKEN_KIND_TRUE;
+    } else if (string_view_is_equal(name, SV_LIT("false"))) {
+      kind = TOKEN_KIND_FALSE;
     }
 
     l->cursor += name.length;
@@ -92,44 +96,68 @@ Token lexer_next_token(Lexer *l) {
 
   TokenKind kind;
   Span span = lexer_make_span(l, 1);
+  StringView operator= string_view_slice(code, 0, 2);
 
-  switch (code.data[0]) {
-  case '=':
-    kind = TOKEN_KIND_EQUAL;
-    break;
-  case ';':
-    kind = TOKEN_KIND_SEMICOLON;
-    break;
-  case '+':
-    kind = TOKEN_KIND_PLUS;
-    break;
-  case '-':
-    kind = TOKEN_KIND_MINUS;
-    break;
-  case '*':
-    kind = TOKEN_KIND_STAR;
-    break;
-  case '/':
-    kind = TOKEN_KIND_SLASH;
-    break;
-  case '%':
-    kind = TOKEN_KIND_PERCENTAGE;
-    break;
-  case '(':
-    kind = TOKEN_KIND_OPEN_PAREN;
-    break;
-  case ')':
-    kind = TOKEN_KIND_CLOSE_PAREN;
-    break;
-  default: {
-    ErrorContext ctx = {.source = l->source, .span = span};
-    error_throw_fmt(&ctx, "unexpected char has found: %c", string_view_at(code, 0));
-  }
+  if (string_view_is_equal(operator, SV_LIT("=="))) {
+    span.end += 1;
+    kind = TOKEN_KIND_EQEQ;
+  } else if (string_view_is_equal(operator, SV_LIT("!="))) {
+    span.end += 1;
+    kind = TOKEN_KIND_NEQ;
+  } else if (string_view_is_equal(operator, SV_LIT(">="))) {
+    span.end += 1;
+    kind = TOKEN_KIND_GTE;
+  } else if (string_view_is_equal(operator, SV_LIT("<="))) {
+    span.end += 1;
+    kind = TOKEN_KIND_LTE;
+  } else {
+    switch (code.data[0]) {
+    case '=':
+      kind = TOKEN_KIND_EQUAL;
+      break;
+    case '>':
+      kind = TOKEN_KIND_GT;
+      break;
+    case '<':
+      kind = TOKEN_KIND_LT;
+      break;
+    case ';':
+      kind = TOKEN_KIND_SEMICOLON;
+      break;
+    case '+':
+      kind = TOKEN_KIND_PLUS;
+      break;
+    case '-':
+      kind = TOKEN_KIND_MINUS;
+      break;
+    case '*':
+      kind = TOKEN_KIND_STAR;
+      break;
+    case '/':
+      kind = TOKEN_KIND_SLASH;
+      break;
+    case '%':
+      kind = TOKEN_KIND_PERCENTAGE;
+      break;
+    case '(':
+      kind = TOKEN_KIND_OPEN_PAREN;
+      break;
+    case ')':
+      kind = TOKEN_KIND_CLOSE_PAREN;
+      break;
+    default: {
+      ErrorContext ctx = {.source = l->source, .span = span};
+      error_throw_fmt(&ctx, "unexpected char has found: %c",
+                      string_view_at(code, 0));
+    }
+    }
+
+    operator= string_view_slice(code, 0, 1);
   }
 
-  l->cursor += 1;
-  l->col += 1;
-  return (Token){kind, string_view_slice(code, 0, 1), span};
+  l->cursor += operator.length;
+  l->col += operator.length;
+  return (Token){.kind = kind, .lexeme = operator, .span = span };
 }
 
 b8 lexer_has_more_tokens(Lexer *l) {

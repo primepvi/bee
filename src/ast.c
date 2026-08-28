@@ -6,6 +6,8 @@ const char *const TOKEN_NAMES[TOKEN_KIND_KEY_COUNT] = {
     [TOKEN_KIND_LET] = "Let",
     [TOKEN_KIND_CONST] = "Const",
     [TOKEN_KIND_ECHO] = "Echo",
+    [TOKEN_KIND_TRUE] = "True",
+    [TOKEN_KIND_FALSE] = "False",
     [TOKEN_KIND_IDENTIFIER] = "Identifier",
     [TOKEN_KIND_NUMBER] = "Number",
     [TOKEN_KIND_STRING] = "String",
@@ -17,6 +19,12 @@ const char *const TOKEN_NAMES[TOKEN_KIND_KEY_COUNT] = {
     [TOKEN_KIND_MINUS] = "Minus",
     [TOKEN_KIND_STAR] = "Star",
     [TOKEN_KIND_SLASH] = "Slash",
+    [TOKEN_KIND_GT] = "Greater Than",
+    [TOKEN_KIND_GTE] = "Greater Than Equal",
+    [TOKEN_KIND_LT] = "Less Than",
+    [TOKEN_KIND_LTE] = "Less Than Equal",
+    [TOKEN_KIND_EQEQ] = "Equal Equal",
+    [TOKEN_KIND_NEQ] = "Not Equal",
     [TOKEN_KIND_PERCENTAGE] = "Percentage",
     [TOKEN_KIND_EOF] = "End of File",
 };
@@ -152,7 +160,7 @@ u32 ast_unary_operator_priority(TokenKind kind) {
   switch (kind) {
   case TOKEN_KIND_PLUS:
   case TOKEN_KIND_MINUS:
-    return 3;
+    return 4;
 
   default:
     return 0;
@@ -164,11 +172,18 @@ u32 ast_binary_operator_priority(TokenKind kind) {
   case TOKEN_KIND_STAR:
   case TOKEN_KIND_SLASH:
   case TOKEN_KIND_PERCENTAGE:
-    return 2;
+    return 3;
 
   case TOKEN_KIND_PLUS:
   case TOKEN_KIND_MINUS:
-    return 1;
+    return 2;
+  case TOKEN_KIND_GT:
+  case TOKEN_KIND_GTE:
+  case TOKEN_KIND_LT:
+  case TOKEN_KIND_LTE:
+  case TOKEN_KIND_EQEQ:
+  case TOKEN_KIND_NEQ:
+    return 1;    
 
   default:
     return 0;

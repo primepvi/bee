@@ -8,7 +8,8 @@
 
 typedef enum {
   VALUE_KIND_INTEGER,
-  VALUE_KIND_STRING
+  VALUE_KIND_STRING,
+  VALUE_KIND_BOOLEAN,  
 } ValueKind;  
 
 typedef struct {
@@ -16,8 +17,9 @@ typedef struct {
   union {
     i64 integer;
     StringView string;
+    b8 boolean;
   } as;
-} Value;  
+} Value;
 
 typedef enum {
   ENV_ENTRY_KIND_VARIABLE,
