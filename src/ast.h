@@ -1,9 +1,12 @@
 #ifndef BEE_AST_H
 #define BEE_AST_H
 
-#include "libs/types.h"
-#include "libs/string_view.h"
 #include "libs/array_list.h"
+#include "libs/string_view.h"
+#include "libs/types.h"
+
+typedef struct Expr Expr;
+typedef struct Stmt Stmt;
 
 typedef struct {
   u32 line;
@@ -17,9 +20,9 @@ typedef enum {
   TOKEN_KIND_TRUE,
   TOKEN_KIND_FALSE,
   TOKEN_KIND_AND,
-  TOKEN_KIND_OR,  
+  TOKEN_KIND_OR,
   TOKEN_KIND_NOT,
-  TOKEN_KIND_IDENTIFIER,  
+  TOKEN_KIND_IDENTIFIER,
 
   TOKEN_KIND_NUMBER,
   TOKEN_KIND_STRING,
@@ -40,8 +43,8 @@ typedef enum {
   TOKEN_KIND_STAR,
   TOKEN_KIND_SLASH,
   TOKEN_KIND_PERCENTAGE,
-  
-  TOKEN_KIND_EOF,  
+
+  TOKEN_KIND_EOF,
   TOKEN_KIND_KEY_COUNT,
 } TokenKind;
 
@@ -51,10 +54,34 @@ typedef struct {
   Span span;
 } Token;
 
-extern const char *const TOKEN_NAMES[TOKEN_KIND_KEY_COUNT];
+typedef enum {
+  VALUE_KIND_INTEGER,
+  VALUE_KIND_BOOLEAN,
+  VALUE_KIND_STRING
+} ValueKind;
 
-typedef struct Expr Expr;
-typedef struct Stmt Stmt;
+typedef struct {
+  ValueKind kind;
+  union {
+    i64 integer;
+    b8 boolean;
+    StringView string;
+  } as;
+} Value;
+
+typedef struct {
+  StringView identifier;
+} Type;
+
+typedef struct {
+  StringView identifier;
+  Type type;
+  b8 constant;
+  Expr *value_expr;
+  Value *value;  
+} Symbol;
+
+extern const char *const TOKEN_NAMES[TOKEN_KIND_KEY_COUNT];
 
 typedef enum {
   EXPR_KIND_LITERAL,

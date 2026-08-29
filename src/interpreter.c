@@ -1,17 +1,21 @@
 #include "interpreter.h"
 #include "ast.h"
+
 #include "libs/array_list.h"
-#include "libs/env.h"
 #include "libs/error.h"
 #include "libs/string_view.h"
+
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
-Interpreter interpreter_create(Source *source, Program *program) {
+Interpreter interpreter_create(Program *program, Source *source,
+                               HashMap *symbols) {
   Interpreter interpreter = {0};
-  interpreter.source = source;
   interpreter.program = program;
-  interpreter.global_env = env_create(NULL);
+  interpreter.source = source;
+  interpreter.symbols = symbols;
+
   return interpreter;
 }
 
@@ -29,23 +33,11 @@ void interpreter_eval_expr_stmt(Interpreter *interpreter, ExprStmt *stmt) {
 
 void interpreter_eval_variable_decl_stmt(Interpreter *interpreter,
                                          VariableDeclStmt *stmt) {
-  if (env_has(&interpreter->global_env, stmt->identifier_token.lexeme)) {
-    ErrorContext ctx = {.source = interpreter->source,
-                        .span = stmt->identifier_token.span};
-    error_throw_fmt(&ctx, "variable " SV_FMT " is already declared.",
-                    SV_ARG(stmt->identifier_token.lexeme));
-  }
-
   Value value = interpreter_eval_expr(interpreter, &stmt->value);
-  EnvEntry entry = {0};
-  entry.kind = ENV_ENTRY_KIND_VARIABLE;
-  entry.as.variable =
-      (EnvVariable){.constant = string_view_is_equal(stmt->keyword_token.lexeme,
-                                                     SV_LIT("const")),
-                    .identifier = stmt->identifier_token.lexeme,
-                    .value = value};
-
-  env_set(&interpreter->global_env, stmt->identifier_token.lexeme, entry);
+  Symbol *symbol =
+      hashmap_get(interpreter->symbols, stmt->identifier_token.lexeme);
+  symbol->value = malloc(sizeof(Value));
+  memcpy(symbol->value, &value, sizeof(Value));
 }
 
 void interpreter_eval_echo_stmt(Interpreter *interpreter, EchoStmt *stmt) {
@@ -117,80 +109,27 @@ Value interpreter_eval_literal_expr(Interpreter *interpreter,
 
 Value interpreter_eval_assignment_expr(Interpreter *interpreter,
                                        AssignmentExpr *expr) {
-  EnvEntry *entry =
-      env_get(&interpreter->global_env, expr->identifier_token.lexeme);
-  if (entry == NULL) {
-    ErrorContext ctx = {
-        .source = interpreter->source,
-        .span = expr->identifier_token.span,
-    };
-    error_throw_fmt(&ctx, "attempt to assign a undefined variable: " SV_FMT ".",
-                    SV_ARG(expr->identifier_token.lexeme));
-  }
-
-  if (entry->kind != ENV_ENTRY_KIND_VARIABLE) {
-    ErrorContext ctx = {.source = interpreter->source,
-                        .span = expr->identifier_token.span};
-    error_throw_fmt(&ctx, "attempt to assign an non-variable: " SV_FMT ".",
-                    SV_ARG(expr->identifier_token.lexeme));
-  }
-
-  EnvVariable *variable = &entry->as.variable;
-  if (variable->constant) {
-    ErrorContext ctx = {
-        .source = interpreter->source,
-        .span = expr->assignment_token.span,
-    };
-    error_throw_fmt(&ctx,
-                    "attempt to reassign a constant variable: " SV_FMT ".",
-                    SV_ARG(expr->identifier_token.lexeme));
-  }
-
   Value value = interpreter_eval_expr(interpreter, expr->value);
-  variable->value = value;
+  Symbol *symbol =
+      hashmap_get(interpreter->symbols, expr->identifier_token.lexeme);
+  symbol->value = malloc(sizeof(Symbol));
+  memcpy(symbol->value, &value, sizeof(Value));
+
   return value;
 }
 
 Value interpreter_eval_identifier_expr(Interpreter *interpreter,
                                        IdentifierExpr *expr) {
-  EnvEntry *entry =
-      env_get(&interpreter->global_env, expr->identifier_token.lexeme);
-  if (entry == NULL) {
-    ErrorContext ctx = {.source = interpreter->source,
-                        .span = expr->identifier_token.span};
-    error_throw_fmt(&ctx,
-                    "attempt to access a undefined identifier: " SV_FMT ".",
-                    SV_ARG(expr->identifier_token.lexeme));
-  }
-
-  switch (entry->kind) {
-  case ENV_ENTRY_KIND_VARIABLE:
-    return entry->as.variable.value;
-  default:
-    fprintf(stderr, "ERROR: unreachable (interpreter_eval_identifier_expr).\n");
-    exit(1);
-  }
+  Symbol *symbol =
+      hashmap_get(interpreter->symbols, expr->identifier_token.lexeme);
+  return *symbol->value;
 }
 
 Value interpreter_eval_binary_expr(Interpreter *interpreter, BinaryExpr *expr) {
   Value left = interpreter_eval_expr(interpreter, expr->left);
   Value right = interpreter_eval_expr(interpreter, expr->right);
-
-  if (left.kind == VALUE_KIND_STRING) {
-    ErrorContext ctx = {.source = interpreter->source,
-                        .span = expr->left->span};
-    error_throw(&ctx,
-                "attempt to perform a binary operation with a string operand.");
-  }
-
-  if (right.kind == VALUE_KIND_STRING) {
-    ErrorContext ctx = {.source = interpreter->source,
-                        .span = expr->right->span};
-    error_throw(&ctx,
-                "attempt to perform a binary operation with a string operand.");
-  }
-
   Value value = {0};
+
   switch (expr->operator_token.kind) {
   case TOKEN_KIND_PLUS:
     value.kind = VALUE_KIND_INTEGER;
@@ -208,7 +147,7 @@ Value interpreter_eval_binary_expr(Interpreter *interpreter, BinaryExpr *expr) {
     if (right.as.integer == 0) {
       ErrorContext ctx = {.source = interpreter->source,
                           .span = expr->right->span};
-      error_throw(&ctx, "attempt divide by zero.");
+      error_throw(&ctx, "attempt to divide by zero.");
     }
 
     value.kind = VALUE_KIND_INTEGER;
@@ -256,25 +195,8 @@ Value interpreter_eval_logical_expr(Interpreter *interpreter,
   Value left = interpreter_eval_expr(interpreter, expr->left);
   Value right = interpreter_eval_expr(interpreter, expr->right);
 
-  if (left.kind != VALUE_KIND_BOOLEAN) {
-    ErrorContext ctx = {.source = interpreter->source,
-                        .span = expr->left->span};
-    error_throw(
-        &ctx,
-        "attempt to perform a logical operation with a non-boolean operand.");
-  }
-
-  if (right.kind != VALUE_KIND_BOOLEAN) {
-    ErrorContext ctx = {.source = interpreter->source,
-                        .span = expr->right->span};
-    error_throw(
-        &ctx,
-        "attempt to perform a logical operation with a non-boolean operand.");
-  }
-
   Value value = {0};
   value.kind = VALUE_KIND_BOOLEAN;
-
   switch (expr->operator_token.kind) {
   case TOKEN_KIND_AND:
     value.as.boolean = left.as.boolean && right.as.boolean;
@@ -292,42 +214,19 @@ Value interpreter_eval_logical_expr(Interpreter *interpreter,
 
 Value interpreter_eval_unary_expr(Interpreter *interpreter, UnaryExpr *unary) {
   Value value = interpreter_eval_expr(interpreter, unary->operand);
-
   switch (unary->operator_token.kind) {
-  case TOKEN_KIND_MINUS: {
-    if (value.kind != VALUE_KIND_INTEGER) {
-      ErrorContext ctx = {.source = interpreter->source,
-                          .span = unary->operand->span};
-      error_throw(&ctx, "unary operand for operator '-' must be a integer.");
-    }
-
+  case TOKEN_KIND_MINUS:
     value.as.integer *= -1;
     break;
-  }
-  case TOKEN_KIND_PLUS: {
-    if (value.kind != VALUE_KIND_INTEGER) {
-      ErrorContext ctx = {.source = interpreter->source,
-                          .span = unary->operand->span};
-      error_throw(&ctx, "unary operand for operator '+' must be a integer.");
-    }
-    
+  case TOKEN_KIND_PLUS:
     break;
-  }
-  case TOKEN_KIND_NOT: {
-    if (value.kind != VALUE_KIND_BOOLEAN) {
-      ErrorContext ctx = {.source = interpreter->source,
-                          .span = unary->operand->span};
-      error_throw(&ctx, "unary operand for operator 'not' must be a boolean.");
-    }
-    
+  case TOKEN_KIND_NOT:
     value.as.boolean = !value.as.boolean;
     break;
-  }
   default: {
-    ErrorContext ctx = {.source = interpreter->source,
-                        .span = unary->operator_token.span};
-    error_throw(&ctx, "invalid unary operator, expects '-' or '+'.");
-  }
+    fprintf(stderr, "ERROR: unreachable (interpreter_eval_unary_expr).\n");
+    exit(1);
+  }    
   }
 
   return value;
