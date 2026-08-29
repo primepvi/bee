@@ -174,13 +174,36 @@ Value interpreter_eval_binary_expr(Interpreter *interpreter, BinaryExpr *expr) {
     value.kind = VALUE_KIND_BOOLEAN;
     value.as.boolean = left.as.integer <= right.as.integer;
     break;
+
   case TOKEN_KIND_EQEQ:
     value.kind = VALUE_KIND_BOOLEAN;
-    value.as.boolean = left.as.integer == right.as.integer;
+    if (left.kind == VALUE_KIND_INTEGER && right.kind == VALUE_KIND_INTEGER) {
+      value.as.boolean = left.as.integer == right.as.integer;
+    } else if (left.kind == VALUE_KIND_BOOLEAN &&
+               right.kind == VALUE_KIND_BOOLEAN) {
+      value.as.boolean = left.as.boolean == right.as.boolean;
+    } else if (left.kind == VALUE_KIND_STRING &&
+               right.kind == VALUE_KIND_STRING) {
+      value.as.boolean = string_view_is_equal(left.as.string, right.as.string);
+    } else {
+      value.as.boolean = false;
+    }
+
     break;
   case TOKEN_KIND_NEQ:
     value.kind = VALUE_KIND_BOOLEAN;
-    value.as.boolean = left.as.integer != right.as.integer;
+    if (left.kind == VALUE_KIND_INTEGER && right.kind == VALUE_KIND_INTEGER) {
+      value.as.boolean = left.as.integer != right.as.integer;
+    } else if (left.kind == VALUE_KIND_BOOLEAN &&
+               right.kind == VALUE_KIND_BOOLEAN) {
+      value.as.boolean = left.as.boolean != right.as.boolean;
+    } else if (left.kind == VALUE_KIND_STRING &&
+               right.kind == VALUE_KIND_STRING) {
+      value.as.boolean = !string_view_is_equal(left.as.string, right.as.string);
+    } else {
+      value.as.boolean = true;
+    }
+    
     break;
   default:
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_binary_expr).\n");
@@ -192,24 +215,37 @@ Value interpreter_eval_binary_expr(Interpreter *interpreter, BinaryExpr *expr) {
 
 Value interpreter_eval_logical_expr(Interpreter *interpreter,
                                     LogicalExpr *expr) {
-  Value left = interpreter_eval_expr(interpreter, expr->left);
-  Value right = interpreter_eval_expr(interpreter, expr->right);
-
   Value value = {0};
   value.kind = VALUE_KIND_BOOLEAN;
+  
   switch (expr->operator_token.kind) {
-  case TOKEN_KIND_AND:
+  case TOKEN_KIND_AND: {
+    Value left = interpreter_eval_expr(interpreter, expr->left);
+    if (!left.as.boolean) {
+      value.as.boolean = false;
+      return value;
+    }
+
+    Value right = interpreter_eval_expr(interpreter, expr->right);
     value.as.boolean = left.as.boolean && right.as.boolean;
-    break;
-  case TOKEN_KIND_OR:
+    
+    return value;
+  }
+  case TOKEN_KIND_OR: {
+    Value left = interpreter_eval_expr(interpreter, expr->left);
+    if (left.as.boolean) {
+      value.as.boolean = true;
+      return value;
+    }
+
+    Value right = interpreter_eval_expr(interpreter, expr->right);
     value.as.boolean = left.as.boolean || right.as.boolean;
-    break;
+    return value;
+  }    
   default:
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_logical_expr).\n");
     exit(1);
   }
-
-  return value;
 }
 
 Value interpreter_eval_unary_expr(Interpreter *interpreter, UnaryExpr *unary) {
@@ -226,7 +262,7 @@ Value interpreter_eval_unary_expr(Interpreter *interpreter, UnaryExpr *unary) {
   default: {
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_unary_expr).\n");
     exit(1);
-  }    
+  }
   }
 
   return value;
