@@ -1,14 +1,17 @@
-let a = 15
-let b = 10
+let a = true
+let b = true
+let c = false
 
-if a > b then
-   echo "a > b"
-else if a < b then
-   echo "a < b"
+if a then
+    if b and c then
+        echo("A and B and C")
+    else
+        echo("A, but no B and C")
+    end
+
+    echo(a)
+    echo(b)
+    echo(c)
 else
-   echo "a == b"
+    echo("no A")
 end
-
-if a > b => echo "a > b"
-else if a < b => echo "a < b"
-else => echo "a == b"

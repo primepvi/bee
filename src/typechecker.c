@@ -10,9 +10,9 @@
 TypeChecker tc_create(Program *program, Source *source, SymbolTable *symbols) {
   TypeChecker tc = {0};
   tc.type_env = hashmap_new(32);
-  tc.program = program;  
+  tc.program = program;
   tc.source = source;
-  tc.symbols = symbols;  
+  tc.symbols = symbols;
 
   // builtin types
   tc_define_type(&tc, (Type){.identifier = SV_LIT("int")});
@@ -74,7 +74,7 @@ void tc_check_block_stmt(TypeChecker *tc, Stmt *stmt) {
     Stmt *stmt = array_list_at(block->stmts, i);
     tc_check_stmt(tc, stmt);
   }
-  
+
   tc->symbols = scope.parent;
   symtable_destroy(&scope);
 }
@@ -83,10 +83,10 @@ void tc_check_if_stmt(TypeChecker *tc, Stmt *stmt) {
   IfStmt *if_stmt = &stmt->as.if_stmt;
   Type condition_type = tc_check_expr(tc, if_stmt->condition);
   if (!type_is(condition_type, SV_LIT("bool"))) {
-    ErrorContext ctx = {.source = tc->source,
-                        .span = if_stmt->condition->span};
+    ErrorContext ctx = {.source = tc->source, .span = if_stmt->condition->span};
     error_throw_fmt(&ctx,
-                    "if condition must be of type 'bool', but received an condition of type '" SV_FMT "'.",
+                    "if condition must be of type 'bool', but received an "
+                    "condition of type '" SV_FMT "'.",
                     SV_ARG(condition_type.identifier));
   }
 
@@ -94,7 +94,28 @@ void tc_check_if_stmt(TypeChecker *tc, Stmt *stmt) {
   if (if_stmt->alternate != NULL) {
     tc_check_stmt(tc, if_stmt->alternate);
   }
-}  
+}
+
+void tc_check_while_stmt(TypeChecker *tc, Stmt *stmt) {
+  WhileStmt *while_stmt = &stmt->as.while_stmt;
+  Type condition_type = tc_check_expr(tc, while_stmt->condition);
+  
+  SymbolTable scope = symtable_new(tc->symbols);
+  tc->symbols = &scope;
+ 
+  if (!type_is(condition_type, SV_LIT("bool"))) {
+    ErrorContext ctx = {.source = tc->source, .span = while_stmt->condition->span};
+    error_throw_fmt(&ctx,
+                    "while condition must be of type 'bool', but received an "
+                    "condition of type '" SV_FMT "'.",
+                    SV_ARG(condition_type.identifier));
+  }
+
+  tc->symbols = scope.parent;
+  symtable_destroy(&scope);
+  
+  tc_check_stmt(tc, while_stmt->body);  
+}
 
 void tc_check_stmt(TypeChecker *tc, Stmt *stmt) {
   switch (stmt->kind) {
@@ -119,7 +140,11 @@ void tc_check_stmt(TypeChecker *tc, Stmt *stmt) {
   case STMT_KIND_IF: {
     tc_check_if_stmt(tc, stmt);
     break;
-  }    
+  }
+  case STMT_KIND_WHILE: {
+    tc_check_while_stmt(tc, stmt);
+    break;
+  }
   default: {
     fprintf(stderr, "ERROR: unreachable (tc_check_stmt).\n");
     exit(1);
@@ -235,23 +260,19 @@ Type tc_check_logical_expr(TypeChecker *tc, Expr *expr) {
 Type tc_check_assignment_expr(TypeChecker *tc, Expr *expr) {
   AssignmentExpr *assignment = &expr->as.assignment;
   Symbol *symbol =
-      symtable_get(tc->symbols, assignment->identifier_token.lexeme);  
+      symtable_get(tc->symbols, assignment->identifier_token.lexeme);
   if (symbol == NULL) {
-    ErrorContext ctx = {
-        .source = tc->source,
-        .span = expr->span
-    };
+    ErrorContext ctx = {.source = tc->source, .span = expr->span};
     error_throw_fmt(&ctx, "attempt to assign a undefined variable: " SV_FMT ".",
                     SV_ARG(assignment->identifier_token.lexeme));
   }
-  
+
   if (symbol->constant) {
     ErrorContext ctx = {
         .source = tc->source,
         .span = expr->span,
     };
-    error_throw_fmt(&ctx,
-                    "attempt to assign a constant variable: " SV_FMT ".",
+    error_throw_fmt(&ctx, "attempt to assign a constant variable: " SV_FMT ".",
                     SV_ARG(assignment->identifier_token.lexeme));
   }
 
@@ -262,7 +283,8 @@ Type tc_check_assignment_expr(TypeChecker *tc, Expr *expr) {
         .span = expr->span,
     };
     error_throw_fmt(&ctx,
-                    "attempt to assign a '" SV_FMT "' value to a '"SV_FMT"' variable.",
+                    "attempt to assign a '" SV_FMT "' value to a '" SV_FMT
+                    "' variable.",
                     SV_ARG(type.identifier), SV_ARG(symbol->type.identifier));
   }
 

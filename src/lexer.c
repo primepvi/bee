@@ -86,6 +86,10 @@ Token lexer_next_token(Lexer *l) {
       kind = TOKEN_KIND_IF;
     } else if (string_view_is_equal(name, SV_LIT("else"))) {
       kind = TOKEN_KIND_ELSE;
+    } else if (string_view_is_equal(name, SV_LIT("while"))) {
+      kind = TOKEN_KIND_WHILE;
+    } else if (string_view_is_equal(name, SV_LIT("do"))) {
+      kind = TOKEN_KIND_DO;
     }
 
     l->cursor += name.length;

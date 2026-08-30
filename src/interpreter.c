@@ -60,10 +60,16 @@ void interpreter_eval_echo_stmt(Interpreter *interpreter, EchoStmt *stmt) {
 }
 
 void interpreter_eval_block_stmt(Interpreter *interpreter, BlockStmt *stmt) {
+  SymbolTable scope = symtable_new(interpreter->symbols);
+  interpreter->symbols = &scope;
+  
   for (u32 i = 0; i < array_list_length(stmt->stmts); i++) {
     Stmt *cur = array_list_at(stmt->stmts, i);
     interpreter_eval_stmt(interpreter, cur);
   }
+
+  interpreter->symbols = scope.parent;
+  symtable_destroy(&scope);
 }
 
 void interpreter_eval_if_stmt(Interpreter *interpreter, IfStmt *stmt) {
@@ -73,6 +79,20 @@ void interpreter_eval_if_stmt(Interpreter *interpreter, IfStmt *stmt) {
   } else if (stmt->alternate != NULL) {
     interpreter_eval_stmt(interpreter, stmt->alternate);
   }
+}
+
+void interpreter_eval_while_stmt(Interpreter *interpreter, WhileStmt *stmt) {
+  SymbolTable scope = symtable_new(interpreter->symbols);
+  interpreter->symbols = &scope;
+
+  Value condition = interpreter_eval_expr(interpreter, stmt->condition);  
+  while (condition.as.boolean) {
+    interpreter_eval_stmt(interpreter, stmt->body);
+    condition = interpreter_eval_expr(interpreter, stmt->condition);
+  }
+
+  interpreter->symbols = scope.parent;
+  symtable_destroy(&scope);  
 }  
 
 void interpreter_eval_stmt(Interpreter *interpreter, Stmt *stmt) {
@@ -91,6 +111,9 @@ void interpreter_eval_stmt(Interpreter *interpreter, Stmt *stmt) {
     break;
   case STMT_KIND_IF:
     interpreter_eval_if_stmt(interpreter, &stmt->as.if_stmt);
+    break;
+  case STMT_KIND_WHILE:
+    interpreter_eval_while_stmt(interpreter, &stmt->as.while_stmt);
     break;
   default:
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_stmt).\n");

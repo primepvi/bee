@@ -26,6 +26,8 @@ typedef enum {
   TOKEN_KIND_END,
   TOKEN_KIND_IF,
   TOKEN_KIND_ELSE,
+  TOKEN_KIND_WHILE,
+  TOKEN_KIND_DO,
   TOKEN_KIND_IDENTIFIER,
 
   TOKEN_KIND_NUMBER,
@@ -141,6 +143,7 @@ typedef enum {
   STMT_KIND_ECHO,
   STMT_KIND_IF,
   STMT_KIND_BLOCK,
+  STMT_KIND_WHILE,
 } StmtKind;
 
 typedef struct {
@@ -168,7 +171,13 @@ typedef struct {
 
 typedef struct {
   ArrayList *stmts;
-} BlockStmt;  
+} BlockStmt;
+
+typedef struct {
+  Token keyword_token;
+  Expr *condition;
+  Stmt *body;
+} WhileStmt; 
 
 typedef struct Stmt {
   StmtKind kind;
@@ -178,6 +187,7 @@ typedef struct Stmt {
     EchoStmt echo;
     IfStmt if_stmt;
     BlockStmt block;
+    WhileStmt while_stmt;
   } as;
   Span span;
 } Stmt;

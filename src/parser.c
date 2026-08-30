@@ -350,7 +350,7 @@ IfStmt parser_parse_if_stmt(Parser *parser) {
       alternate.as.block = block_stmt;
     }
   }
-  
+
   if (consequent.kind == STMT_KIND_BLOCK &&
       (!has_alternate || alternate.kind != STMT_KIND_IF)) {
     if (!parser_match_token(parser, TOKEN_KIND_END)) {
@@ -376,6 +376,46 @@ IfStmt parser_parse_if_stmt(Parser *parser) {
   }
 
   return stmt;
+}
+
+WhileStmt parser_parse_while_stmt(Parser *parser) {
+  Token keyword_token = parser_eat_token(parser);
+  Expr condition = parser_parse_expr(parser);
+
+  Stmt body = {0};
+  if (parser_match_token(parser, TOKEN_KIND_DO)) {
+    parser_eat_token(parser);
+    body.kind = STMT_KIND_BLOCK;
+    body.as.block = parser_parse_block_stmt(parser, TOKEN_KIND_END);
+    // TODO: add block span when implement multi-line spans.
+  } else if (parser_match_token(parser, TOKEN_KIND_ARROW)) {
+    parser_eat_token(parser);
+    body = parser_parse_stmt(parser);
+  } else {
+    ErrorContext ctx = {.source = parser->source,
+                        .span = parser->current_token.span};
+    error_throw(&ctx, "expected 'do' or '=>', because while statements only "
+                      "accept a block or expression body.");
+  }
+
+  if (body.kind == STMT_KIND_BLOCK) {
+    if (!parser_match_token(parser, TOKEN_KIND_END)) {
+      ErrorContext ctx = {.source = parser->source,
+                          .span = parser->current_token.span};
+
+      error_throw(&ctx, "expected 'end' keyword to close if block.");
+    }
+    parser_eat_token(parser);
+  }
+
+  WhileStmt while_stmt = {0};
+  while_stmt.keyword_token = keyword_token;  
+  while_stmt.body = malloc(sizeof(Stmt));
+  while_stmt.condition = malloc(sizeof(Expr));
+  memcpy(while_stmt.body, &body, sizeof(Stmt));
+  memcpy(while_stmt.condition, &condition, sizeof(Expr));
+  
+  return while_stmt;
 }
 
 Stmt parser_parse_stmt(Parser *parser) {
@@ -418,6 +458,16 @@ Stmt parser_parse_stmt(Parser *parser) {
     stmt.span = span;
     break;
   }
+  case TOKEN_KIND_WHILE: {
+    WhileStmt while_stmt = parser_parse_while_stmt(parser);
+    Span span = {.line = while_stmt.keyword_token.span.line,
+                 .start = while_stmt.keyword_token.span.start,
+                 .end = while_stmt.body->span.end};
+    stmt.kind = STMT_KIND_WHILE;
+    stmt.as.while_stmt = while_stmt;
+    stmt.span = span;
+    break;
+  }    
   default: {
     ExprStmt expr = parser_parse_expr_stmt(parser);
     stmt.kind = STMT_KIND_EXPR;
