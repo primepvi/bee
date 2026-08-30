@@ -1,0 +1,14 @@
+fn double(x: int): int -> x * 2
+
+fn divide(x: int, y: int): int
+   if y == 0 then
+      return -1
+   end
+
+   return x / y
+end
+
+fn main(): void
+   echo double(10)
+   echo divide(10, 2)
+end

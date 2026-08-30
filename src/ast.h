@@ -31,11 +31,13 @@ typedef enum {
   TOKEN_KIND_DO,
   TOKEN_KIND_WHEN,
   TOKEN_KIND_OTHERWISE,
+  TOKEN_KIND_FN,
   TOKEN_KIND_IDENTIFIER,
 
   TOKEN_KIND_NUMBER,
   TOKEN_KIND_STRING,
 
+  TOKEN_KIND_COLON,
   TOKEN_KIND_SEMICOLON,
   TOKEN_KIND_EQUAL,
   TOKEN_KIND_OPEN_PAREN,
@@ -165,6 +167,7 @@ typedef struct {
   Token keyword_token;
   Token identifier_token;
   Token assignment_token;
+  Token *type_identifier_token;
   Expr value;
 } VariableDeclStmt;
 

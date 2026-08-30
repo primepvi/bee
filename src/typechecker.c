@@ -19,6 +19,7 @@ TypeChecker tc_create(Program *program, Source *source, SymbolTable *symbols) {
   tc_define_type(&tc, (Type){.identifier = SV_LIT("bool")});
   tc_define_type(&tc, (Type){.identifier = SV_LIT("string")});
   tc_define_type(&tc, (Type){.identifier = SV_LIT("void")});
+  tc_define_type(&tc, (Type){.identifier = SV_LIT("invalid")});
 
   return tc;
 }
@@ -29,13 +30,8 @@ void tc_define_type(TypeChecker *tc, Type type) {
 
 Type tc_get_type(TypeChecker *tc, StringView identifier) {
   Type *type = hashmap_get(tc->type_env, identifier);
-  if (type == NULL) {
-    fprintf(stderr, "ERROR: attempt to get and undefined type: " SV_FMT "\n.",
-            SV_ARG(identifier));
-    exit(1);
-  }
-
-  return *type;
+  return type == NULL ? *(Type *)hashmap_get(tc->type_env, SV_LIT("invalid"))
+                      : *type;
 }
 
 void tc_check(TypeChecker *tc) {
@@ -53,6 +49,24 @@ void tc_check_variable_decl_stmt(TypeChecker *tc, Stmt *stmt) {
     error_throw_fmt(&ctx, "variable " SV_FMT " is already declared.",
                     SV_ARG(decl->identifier_token.lexeme));
   }
+  Type value_type = tc_check_expr(tc, &decl->value);
+  Type type = value_type;
+  if (decl->type_identifier_token != NULL) {
+    Type anotation_type = tc_get_type(tc, decl->type_identifier_token->lexeme);
+    if (type_is(anotation_type, SV_LIT("invalid"))) {
+      ErrorContext ctx = {.source = tc->source,
+                          .span = decl->type_identifier_token->span};
+      error_throw(&ctx, "attempt to anotate a variable with non-defined type.");
+    }
+
+    if (!type_is_equal(anotation_type, value_type)) {
+      ErrorContext ctx = {.source = tc->source, decl->value.span};
+      error_throw_fmt(&ctx,
+                      "variable expects value of type '" SV_FMT
+                      "', but received value of type '" SV_FMT "'.",
+		      SV_ARG(anotation_type.identifier), SV_ARG(value_type.identifier));
+    }
+  }
 
   Symbol symbol = {0};
   symbol.constant =
@@ -60,7 +74,7 @@ void tc_check_variable_decl_stmt(TypeChecker *tc, Stmt *stmt) {
   symbol.value_expr = &decl->value;
   symbol.value = NULL;
   symbol.identifier = decl->identifier_token.lexeme;
-  symbol.type = tc_check_expr(tc, &decl->value);
+  symbol.type = type;
 
   symtable_put(tc->symbols, symbol);
 }

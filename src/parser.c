@@ -92,7 +92,8 @@ WhenExpr parser_parse_when_expr(Parser *parser) {
     ErrorContext ctx = {.source = parser->source,
                         .span = parser->current_token.span};
     error_throw_fmt(
-        &ctx, "when expression expects 'then' keyword, but received '" SV_FMT "'.",
+        &ctx,
+        "when expression expects 'then' keyword, but received '" SV_FMT "'.",
         SV_ARG(parser->current_token.lexeme));
   }
   parser_eat_token(parser);
@@ -102,8 +103,10 @@ WhenExpr parser_parse_when_expr(Parser *parser) {
     ErrorContext ctx = {.source = parser->source,
                         .span = parser->current_token.span};
     error_throw_fmt(
-        &ctx, "when expression expects 'otherwise' keyword, but received '" SV_FMT "'.",
-        SV_ARG(parser->current_token.lexeme));    
+        &ctx,
+        "when expression expects 'otherwise' keyword, but received '" SV_FMT
+        "'.",
+        SV_ARG(parser->current_token.lexeme));
   }
   Token otherwise_token = parser_eat_token(parser);
   Expr alternate = parser_parse_expr(parser);
@@ -287,6 +290,22 @@ VariableDeclStmt parser_parse_variable_decl_stmt(Parser *parser) {
   }
 
   Token identifier_token = parser_eat_token(parser);
+  Token *type_identifier_token = NULL;
+  if (parser_match_token(parser, TOKEN_KIND_COLON)) {
+    parser_eat_token(parser);
+    if (!parser_match_token(parser, TOKEN_KIND_IDENTIFIER)) {
+      ErrorContext ctx = {.source = parser->source,
+                          .span = parser->current_token.span};
+
+      error_throw_fmt(&ctx, "expected type name, but received '" SV_FMT "'",
+                      SV_ARG(parser->current_token.lexeme));
+    }
+
+    type_identifier_token = malloc(sizeof(Token));
+    Token type = parser_eat_token(parser);
+    memcpy(type_identifier_token, &type, sizeof(Token));
+  }
+
   if (!parser_match_token(parser, TOKEN_KIND_EQUAL)) {
     ErrorContext ctx = {.source = parser->source,
                         .span = parser->current_token.span};
@@ -300,6 +319,7 @@ VariableDeclStmt parser_parse_variable_decl_stmt(Parser *parser) {
   return (VariableDeclStmt){.keyword_token = keyword_token,
                             .identifier_token = identifier_token,
                             .assignment_token = assignment_token,
+                            .type_identifier_token = type_identifier_token,
                             .value = value};
 }
 

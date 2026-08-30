@@ -1,0 +1,11 @@
+const name: string = "John"
+const surname = "Doe"
+
+let age: int = 18
+let double = age * 2
+
+echo name
+echo surname
+
+echo age
+echo double

@@ -96,6 +96,8 @@ Token lexer_next_token(Lexer *l) {
       kind = TOKEN_KIND_WHEN;
     } else if (string_view_is_equal(name, SV_LIT("otherwise"))) {
       kind = TOKEN_KIND_OTHERWISE;
+    } else if (string_view_is_equal(name, SV_LIT("fn"))) {
+      kind = TOKEN_KIND_FN;
     }
 
     l->cursor += name.length;
@@ -147,6 +149,9 @@ Token lexer_next_token(Lexer *l) {
       break;
     case '<':
       kind = TOKEN_KIND_LT;
+      break;
+    case ':':
+      kind = TOKEN_KIND_COLON;
       break;
     case ';':
       kind = TOKEN_KIND_SEMICOLON;
