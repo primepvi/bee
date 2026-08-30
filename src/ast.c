@@ -11,6 +11,10 @@ const char *const TOKEN_NAMES[TOKEN_KIND_KEY_COUNT] = {
     [TOKEN_KIND_OR] = "Or",
     [TOKEN_KIND_NOT] = "Not",
     [TOKEN_KIND_FALSE] = "False",
+    [TOKEN_KIND_THEN] = "Then",
+    [TOKEN_KIND_END] = "End",
+    [TOKEN_KIND_IF] = "If",
+    [TOKEN_KIND_ELSE] = "Else",
     [TOKEN_KIND_IDENTIFIER] = "Identifier",
     [TOKEN_KIND_NUMBER] = "Number",
     [TOKEN_KIND_STRING] = "String",
@@ -26,6 +30,7 @@ const char *const TOKEN_NAMES[TOKEN_KIND_KEY_COUNT] = {
     [TOKEN_KIND_GTE] = "Greater Than Equal",
     [TOKEN_KIND_LT] = "Less Than",
     [TOKEN_KIND_LTE] = "Less Than Equal",
+    [TOKEN_KIND_ARROW] = "Arrow",
     [TOKEN_KIND_EQEQ] = "Equal Equal",
     [TOKEN_KIND_NEQ] = "Not Equal",
     [TOKEN_KIND_PERCENTAGE] = "Percentage",
@@ -49,7 +54,7 @@ static void ast_print_expr(const Expr *expr, u32 depth) {
   switch (expr->kind) {
   case EXPR_KIND_LITERAL: {
     const LiteralExpr *literal = &expr->as.literal;
-    printf("Literal: " SV_FMT "\n", SV_ARG(literal->value_token.lexeme));
+    printf("Literal: (%s) " SV_FMT "\n", TOKEN_NAMES[literal->value_token.kind], SV_ARG(literal->value_token.lexeme));
     break;
   }
   case EXPR_KIND_IDENTIFIER: {
@@ -159,6 +164,34 @@ static void ast_print_stmt(const Stmt *stmt, u32 depth) {
     ast_print_expr(&echo->message, depth + 1);
     break;
   }
+  case STMT_KIND_BLOCK: {
+    const BlockStmt *block = &stmt->as.block;
+    printf("Block\n");
+    for (u32 i = 0; i < array_list_length(block->stmts); i++) {
+      Stmt *cur = array_list_at(block->stmts, i);
+      ast_print_stmt(cur, depth + 1);
+    }
+    break;
+  }
+  case STMT_KIND_IF: {
+    const IfStmt *if_stmt = &stmt->as.if_stmt;
+    printf("If\n");
+
+    print_indent(depth + 1);
+    printf("Condition\n");
+    ast_print_expr(if_stmt->condition, depth + 2);
+
+    print_indent(depth + 1);
+    printf("Consequent\n");
+    ast_print_stmt(if_stmt->consequent, depth + 2);
+
+    if (if_stmt->alternate != NULL) {
+      print_indent(depth + 1);
+      printf("Alternate\n");
+      ast_print_stmt(if_stmt->alternate, depth + 2);
+    }
+    break;
+  }    
   }
 }
 
@@ -209,3 +242,7 @@ u32 ast_binary_operator_priority(TokenKind kind) {
     return 0;
   }
 }
+
+b8 ast_token_kind_compare(void *current, void *expected) {
+  return *(TokenKind*)current == *(TokenKind*)expected;
+}  

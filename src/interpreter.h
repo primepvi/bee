@@ -3,16 +3,17 @@
 
 #include "ast.h"
 #include "libs/hashmap.h"
+#include "libs/symbol_table.h"
 #include "libs/types.h"
 #include "libs/source.h"
 
 typedef struct {
   Source *source;
   Program *program;
-  HashMap *symbols;
+  SymbolTable *symbols;
 } Interpreter;
 
-Interpreter interpreter_create(Program *program, Source *source, HashMap *symbols);
+Interpreter interpreter_create(Program *program, Source *source, SymbolTable *symbols);
 void interpreter_eval(Interpreter *interpreter);
 Value interpreter_eval_expr(Interpreter *interpreter, Expr *expr);
 void interpreter_eval_stmt(Interpreter *interpreter, Stmt *stmt);

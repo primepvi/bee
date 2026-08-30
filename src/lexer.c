@@ -78,6 +78,14 @@ Token lexer_next_token(Lexer *l) {
       kind = TOKEN_KIND_OR;
     } else if (string_view_is_equal(name, SV_LIT("not"))) {
       kind = TOKEN_KIND_NOT;
+    } else if (string_view_is_equal(name, SV_LIT("then"))) {
+      kind = TOKEN_KIND_THEN;
+    } else if (string_view_is_equal(name, SV_LIT("end"))) {
+      kind = TOKEN_KIND_END;
+    } else if (string_view_is_equal(name, SV_LIT("if"))) {
+      kind = TOKEN_KIND_IF;
+    } else if (string_view_is_equal(name, SV_LIT("else"))) {
+      kind = TOKEN_KIND_ELSE;
     }
 
     l->cursor += name.length;
@@ -116,6 +124,9 @@ Token lexer_next_token(Lexer *l) {
   } else if (string_view_is_equal(operator, SV_LIT("<="))) {
     span.end += 1;
     kind = TOKEN_KIND_LTE;
+  } else if (string_view_is_equal(operator, SV_LIT("=>"))) {
+    span.end += 1;
+    kind = TOKEN_KIND_ARROW;
   } else {
     switch (code.data[0]) {
     case '=':

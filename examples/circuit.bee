@@ -4,5 +4,5 @@ let b = false
 echo a == "Hello, World" and b = true
 echo b
 
-echo a != "Hello, World" and b = false
+echo a == "Hello, World" and b = false
 echo b

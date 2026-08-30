@@ -22,6 +22,10 @@ typedef enum {
   TOKEN_KIND_AND,
   TOKEN_KIND_OR,
   TOKEN_KIND_NOT,
+  TOKEN_KIND_THEN,
+  TOKEN_KIND_END,
+  TOKEN_KIND_IF,
+  TOKEN_KIND_ELSE,
   TOKEN_KIND_IDENTIFIER,
 
   TOKEN_KIND_NUMBER,
@@ -37,6 +41,7 @@ typedef enum {
   TOKEN_KIND_LTE,
   TOKEN_KIND_EQEQ,
   TOKEN_KIND_NEQ,
+  TOKEN_KIND_ARROW,
 
   TOKEN_KIND_PLUS,
   TOKEN_KIND_MINUS,
@@ -68,18 +73,6 @@ typedef struct {
     StringView string;
   } as;
 } Value;
-
-typedef struct {
-  StringView identifier;
-} Type;
-
-typedef struct {
-  StringView identifier;
-  Type type;
-  b8 constant;
-  Expr *value_expr;
-  Value *value;  
-} Symbol;
 
 extern const char *const TOKEN_NAMES[TOKEN_KIND_KEY_COUNT];
 
@@ -146,6 +139,8 @@ typedef enum {
   STMT_KIND_VARIABLE_DECL,
   STMT_KIND_EXPR,
   STMT_KIND_ECHO,
+  STMT_KIND_IF,
+  STMT_KIND_BLOCK,
 } StmtKind;
 
 typedef struct {
@@ -164,12 +159,25 @@ typedef struct {
   Expr message;
 } EchoStmt;
 
+typedef struct {
+  Token keyword_token;
+  Expr *condition;
+  Stmt *consequent;
+  Stmt *alternate;
+} IfStmt;
+
+typedef struct {
+  ArrayList *stmts;
+} BlockStmt;  
+
 typedef struct Stmt {
   StmtKind kind;
   union {
     VariableDeclStmt variable_decl;
     ExprStmt expr;
     EchoStmt echo;
+    IfStmt if_stmt;
+    BlockStmt block;
   } as;
   Span span;
 } Stmt;
@@ -181,5 +189,6 @@ typedef struct {
 void ast_print(const Program *program);
 u32 ast_binary_operator_priority(TokenKind kind);
 u32 ast_unary_operator_priority(TokenKind kind);
+b8 ast_token_kind_compare(void *current, void *expected);
 
 #endif // BEE_AST_H

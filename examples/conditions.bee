@@ -1,0 +1,14 @@
+let a = 15
+let b = 10
+
+if a > b then
+   echo "a > b"
+else if a < b then
+   echo "a < b"
+else
+   echo "a == b"
+end
+
+if a > b => echo "a > b"
+else if a < b => echo "a < b"
+else => echo "a == b"

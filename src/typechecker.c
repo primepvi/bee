@@ -3,21 +3,22 @@
 #include "libs/array_list.h"
 #include "libs/error.h"
 #include "libs/string_view.h"
+#include "libs/symbol_table.h"
 #include <stdio.h>
 #include <stdlib.h>
 
-TypeChecker tc_create(Program *program, Source *source) {
+TypeChecker tc_create(Program *program, Source *source, SymbolTable *symbols) {
   TypeChecker tc = {0};
   tc.type_env = hashmap_new(32);
-  tc.symbols = hashmap_new(32);
+  tc.program = program;  
   tc.source = source;
-  tc.program = program;
+  tc.symbols = symbols;  
 
   // builtin types
   tc_define_type(&tc, (Type){.identifier = SV_LIT("int")});
   tc_define_type(&tc, (Type){.identifier = SV_LIT("bool")});
   tc_define_type(&tc, (Type){.identifier = SV_LIT("string")});
-  tc_define_type(&tc, (Type){.identifier = SV_LIT("null")});
+  tc_define_type(&tc, (Type){.identifier = SV_LIT("void")});
 
   return tc;
 }
@@ -46,7 +47,7 @@ void tc_check(TypeChecker *tc) {
 
 void tc_check_variable_decl_stmt(TypeChecker *tc, Stmt *stmt) {
   VariableDeclStmt *decl = &stmt->as.variable_decl;
-  if (hashmap_has(tc->symbols, decl->identifier_token.lexeme)) {
+  if (symtable_has(tc->symbols, decl->identifier_token.lexeme)) {
     ErrorContext ctx = {.source = tc->source,
                         .span = decl->identifier_token.span};
     error_throw_fmt(&ctx, "variable " SV_FMT " is already declared.",
@@ -61,8 +62,39 @@ void tc_check_variable_decl_stmt(TypeChecker *tc, Stmt *stmt) {
   symbol.identifier = decl->identifier_token.lexeme;
   symbol.type = tc_check_expr(tc, &decl->value);
 
-  hashmap_put(tc->symbols, symbol.identifier, sizeof(Symbol), &symbol);
+  symtable_put(tc->symbols, symbol);
 }
+
+void tc_check_block_stmt(TypeChecker *tc, Stmt *stmt) {
+  BlockStmt *block = &stmt->as.block;
+  SymbolTable scope = symtable_new(tc->symbols);
+  tc->symbols = &scope;
+
+  for (u32 i = 0; i < array_list_length(block->stmts); i++) {
+    Stmt *stmt = array_list_at(block->stmts, i);
+    tc_check_stmt(tc, stmt);
+  }
+  
+  tc->symbols = scope.parent;
+  symtable_destroy(&scope);
+}
+
+void tc_check_if_stmt(TypeChecker *tc, Stmt *stmt) {
+  IfStmt *if_stmt = &stmt->as.if_stmt;
+  Type condition_type = tc_check_expr(tc, if_stmt->condition);
+  if (!type_is(condition_type, SV_LIT("bool"))) {
+    ErrorContext ctx = {.source = tc->source,
+                        .span = if_stmt->condition->span};
+    error_throw_fmt(&ctx,
+                    "if condition must be of type 'bool', but received an condition of type '" SV_FMT "'.",
+                    SV_ARG(condition_type.identifier));
+  }
+
+  tc_check_stmt(tc, if_stmt->consequent);
+  if (if_stmt->alternate != NULL) {
+    tc_check_stmt(tc, if_stmt->alternate);
+  }
+}  
 
 void tc_check_stmt(TypeChecker *tc, Stmt *stmt) {
   switch (stmt->kind) {
@@ -80,6 +112,14 @@ void tc_check_stmt(TypeChecker *tc, Stmt *stmt) {
     tc_check_variable_decl_stmt(tc, stmt);
     break;
   }
+  case STMT_KIND_BLOCK: {
+    tc_check_block_stmt(tc, stmt);
+    break;
+  }
+  case STMT_KIND_IF: {
+    tc_check_if_stmt(tc, stmt);
+    break;
+  }    
   default: {
     fprintf(stderr, "ERROR: unreachable (tc_check_stmt).\n");
     exit(1);
@@ -106,7 +146,7 @@ Type tc_check_literal_expr(TypeChecker *tc, Expr *expr) {
 
 Type tc_check_identifier_expr(TypeChecker *tc, Expr *expr) {
   IdentifierExpr *ident = &expr->as.identifier;
-  Symbol *symbol = hashmap_get(tc->symbols, ident->identifier_token.lexeme);
+  Symbol *symbol = symtable_get(tc->symbols, ident->identifier_token.lexeme);
   if (symbol == NULL) {
     ErrorContext ctx = {.source = tc->source,
                         .span = ident->identifier_token.span};
@@ -195,7 +235,7 @@ Type tc_check_logical_expr(TypeChecker *tc, Expr *expr) {
 Type tc_check_assignment_expr(TypeChecker *tc, Expr *expr) {
   AssignmentExpr *assignment = &expr->as.assignment;
   Symbol *symbol =
-      hashmap_get(tc->symbols, assignment->identifier_token.lexeme);  
+      symtable_get(tc->symbols, assignment->identifier_token.lexeme);  
   if (symbol == NULL) {
     ErrorContext ctx = {
         .source = tc->source,

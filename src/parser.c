@@ -19,6 +19,19 @@ b8 parser_match_token(Parser *parser, TokenKind kind) {
   return kind == parser->current_token.kind;
 }
 
+b8 parser_has_more_tokens(Parser *parser) {
+  return parser->current_token.kind != TOKEN_KIND_EOF;
+}
+
+static b8 parser_block_reached_end(Parser *parser, TokenKind end_kind) {
+  return parser_match_token(parser, end_kind);
+}
+
+static b8 parser_if_block_reached_end(Parser *parser) {
+  return parser_match_token(parser, TOKEN_KIND_ELSE) ||
+         parser_match_token(parser, TOKEN_KIND_END);
+}
+
 LiteralExpr parser_parse_literal_expr(Parser *parser) {
   return (LiteralExpr){
       .value_token = parser_eat_token(parser),
@@ -193,11 +206,9 @@ Expr parser_parse_logical_expr(Parser *parser) {
     memcpy(expr.left, &left, sizeof(Expr));
     memcpy(expr.right, &right, sizeof(Expr));
 
-    Span span = {
-      .line = left.span.line,
-      .start = left.span.start,
-      .end = right.span.end
-    };      
+    Span span = {.line = left.span.line,
+                 .start = left.span.start,
+                 .end = right.span.end};
 
     left.kind = EXPR_KIND_LOGICAL;
     left.as.logical = expr;
@@ -209,6 +220,11 @@ Expr parser_parse_logical_expr(Parser *parser) {
 
 Expr parser_parse_expr(Parser *parser) {
   return parser_parse_logical_expr(parser);
+}
+
+ExprStmt parser_parse_expr_stmt(Parser *parser) {
+  Expr expr = parser_parse_expr(parser);
+  return (ExprStmt){.expr = expr};
 }
 
 VariableDeclStmt parser_parse_variable_decl_stmt(Parser *parser) {
@@ -249,6 +265,119 @@ EchoStmt parser_parse_echo_stmt(Parser *parser) {
   };
 }
 
+BlockStmt parser_parse_block_stmt(Parser *parser, TokenKind end_kind) {
+  ArrayList *stmts = array_list_new(32, sizeof(Stmt));
+
+  while (parser_has_more_tokens(parser) &&
+         !parser_block_reached_end(parser, end_kind)) {
+    Stmt stmt = parser_parse_stmt(parser);
+    array_list_push(stmts, &stmt);
+  }
+
+  if (!parser_match_token(parser, end_kind)) {
+    ErrorContext ctx = {.source = parser->source,
+                        .span = parser->current_token.span};
+
+    error_throw(&ctx, "expected 'end' keyword to close block.");
+  }
+
+  return (BlockStmt){.stmts = stmts};
+}
+
+BlockStmt parser_parse_if_block_stmt(Parser *parser) {
+  ArrayList *stmts = array_list_new(32, sizeof(Stmt));
+
+  while (parser_has_more_tokens(parser) &&
+         !parser_if_block_reached_end(parser)) {
+    Stmt stmt = parser_parse_stmt(parser);
+    array_list_push(stmts, &stmt);
+  }
+
+  if (!parser_match_token(parser, TOKEN_KIND_ELSE) &&
+      !parser_match_token(parser, TOKEN_KIND_END)) {
+    ErrorContext ctx = {.source = parser->source,
+                        .span = parser->current_token.span};
+
+    error_throw(&ctx, "expected 'else' or 'end' to close if block.");
+  }
+
+  return (BlockStmt){.stmts = stmts};
+}
+
+IfStmt parser_parse_if_stmt(Parser *parser) {
+  Token keyword_token = parser_eat_token(parser);
+  Expr condition = parser_parse_expr(parser);
+
+  Stmt consequent = {0};
+  if (parser_match_token(parser, TOKEN_KIND_ARROW)) {
+    parser_eat_token(parser);
+    consequent = parser_parse_stmt(parser);
+  } else if (parser_match_token(parser, TOKEN_KIND_THEN)) {
+    parser_eat_token(parser);
+
+    BlockStmt block_stmt = parser_parse_if_block_stmt(parser);
+    consequent.kind = STMT_KIND_BLOCK;
+    consequent.as.block = block_stmt;
+  } else {
+    ErrorContext ctx = {.source = parser->source,
+                        .span = parser->current_token.span};
+    error_throw(&ctx, "expected 'then' or '=>', because if statements only "
+                      "accept a block or expression consequent.");
+  }
+
+  Stmt alternate = {0};
+  b8 has_alternate = false;
+  if (parser_match_token(parser, TOKEN_KIND_ELSE)) {
+    parser_eat_token(parser);
+    has_alternate = true;
+
+    if (parser_match_token(parser, TOKEN_KIND_IF)) {
+      IfStmt if_stmt = parser_parse_if_stmt(parser);
+      alternate.kind = STMT_KIND_IF;
+      alternate.as.if_stmt = if_stmt;
+      alternate.span = (Span){.line = if_stmt.keyword_token.span.line,
+                              .start = if_stmt.keyword_token.span.start,
+                              .end = if_stmt.alternate == NULL
+                                         ? if_stmt.consequent->span.end
+                                         : if_stmt.alternate->span.end};
+
+    } else if (parser_match_token(parser, TOKEN_KIND_ARROW)) {
+      parser_eat_token(parser);
+      alternate = parser_parse_stmt(parser);
+    } else {
+      BlockStmt block_stmt = parser_parse_block_stmt(parser, TOKEN_KIND_END);
+      alternate.kind = STMT_KIND_BLOCK;
+      alternate.as.block = block_stmt;
+    }
+  }
+  
+  if (consequent.kind == STMT_KIND_BLOCK &&
+      (!has_alternate || alternate.kind != STMT_KIND_IF)) {
+    if (!parser_match_token(parser, TOKEN_KIND_END)) {
+      ErrorContext ctx = {.source = parser->source,
+                          .span = parser->current_token.span};
+
+      error_throw(&ctx, "expected 'end' keyword to close if block.");
+    }
+    parser_eat_token(parser);
+  }
+
+  IfStmt stmt = {0};
+  stmt.keyword_token = keyword_token;
+  stmt.condition = malloc(sizeof(Expr));
+  stmt.consequent = malloc(sizeof(Stmt));
+  stmt.alternate = NULL;
+  memcpy(stmt.condition, &condition, sizeof(Expr));
+  memcpy(stmt.consequent, &consequent, sizeof(Stmt));
+
+  if (has_alternate) {
+    stmt.alternate = malloc(sizeof(Stmt));
+    memcpy(stmt.alternate, &alternate, sizeof(Stmt));
+  }
+
+  return stmt;
+}
+
 Stmt parser_parse_stmt(Parser *parser) {
   Stmt stmt = {0};
 
@@ -276,11 +405,24 @@ Stmt parser_parse_stmt(Parser *parser) {
     stmt.span = span;
     break;
   }
+  case TOKEN_KIND_IF: {
+    IfStmt if_stmt = parser_parse_if_stmt(parser);
+    Span span = {.line = if_stmt.keyword_token.span.line,
+                 .start = if_stmt.keyword_token.span.start,
+                 .end = if_stmt.alternate == NULL
+                            ? if_stmt.consequent->span.end
+                            : if_stmt.alternate->span.end};
+
+    stmt.kind = STMT_KIND_IF;
+    stmt.as.if_stmt = if_stmt;
+    stmt.span = span;
+    break;
+  }
   default: {
-    Expr expr = parser_parse_expr(parser);
+    ExprStmt expr = parser_parse_expr_stmt(parser);
     stmt.kind = STMT_KIND_EXPR;
-    stmt.as.expr = (ExprStmt){expr};
-    stmt.span = expr.span;
+    stmt.as.expr = expr;
+    stmt.span = expr.expr.span;
   }
   }
 

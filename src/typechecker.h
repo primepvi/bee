@@ -5,15 +5,16 @@
 #include "libs/source.h"
 #include "libs/string_view.h"
 #include "libs/hashmap.h"
+#include "libs/symbol_table.h"
 
 typedef struct {
   Program *program;
   Source *source;
-  HashMap *symbols;
+  SymbolTable *symbols;
   HashMap *type_env;
 } TypeChecker;
 
-TypeChecker tc_create(Program *program, Source *source);
+TypeChecker tc_create(Program *program, Source *source, SymbolTable *symbols);
 void tc_define_type(TypeChecker *tc, Type type);
 Type tc_get_type(TypeChecker *tc, StringView identifier);
 

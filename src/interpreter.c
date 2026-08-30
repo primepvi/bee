@@ -4,13 +4,14 @@
 #include "libs/array_list.h"
 #include "libs/error.h"
 #include "libs/string_view.h"
+#include "libs/symbol_table.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 Interpreter interpreter_create(Program *program, Source *source,
-                               HashMap *symbols) {
+                               SymbolTable *symbols) {
   Interpreter interpreter = {0};
   interpreter.program = program;
   interpreter.source = source;
@@ -35,7 +36,7 @@ void interpreter_eval_variable_decl_stmt(Interpreter *interpreter,
                                          VariableDeclStmt *stmt) {
   Value value = interpreter_eval_expr(interpreter, &stmt->value);
   Symbol *symbol =
-      hashmap_get(interpreter->symbols, stmt->identifier_token.lexeme);
+      symtable_get(interpreter->symbols, stmt->identifier_token.lexeme);
   symbol->value = malloc(sizeof(Value));
   memcpy(symbol->value, &value, sizeof(Value));
 }
@@ -58,6 +59,22 @@ void interpreter_eval_echo_stmt(Interpreter *interpreter, EchoStmt *stmt) {
   }
 }
 
+void interpreter_eval_block_stmt(Interpreter *interpreter, BlockStmt *stmt) {
+  for (u32 i = 0; i < array_list_length(stmt->stmts); i++) {
+    Stmt *cur = array_list_at(stmt->stmts, i);
+    interpreter_eval_stmt(interpreter, cur);
+  }
+}
+
+void interpreter_eval_if_stmt(Interpreter *interpreter, IfStmt *stmt) {
+  Value condition = interpreter_eval_expr(interpreter, stmt->condition);
+  if (condition.as.boolean) {
+    interpreter_eval_stmt(interpreter, stmt->consequent);
+  } else if (stmt->alternate != NULL) {
+    interpreter_eval_stmt(interpreter, stmt->alternate);
+  }
+}  
+
 void interpreter_eval_stmt(Interpreter *interpreter, Stmt *stmt) {
   switch (stmt->kind) {
   case STMT_KIND_EXPR:
@@ -68,6 +85,12 @@ void interpreter_eval_stmt(Interpreter *interpreter, Stmt *stmt) {
     break;
   case STMT_KIND_ECHO:
     interpreter_eval_echo_stmt(interpreter, &stmt->as.echo);
+    break;
+  case STMT_KIND_BLOCK:
+    interpreter_eval_block_stmt(interpreter, &stmt->as.block);
+    break;
+  case STMT_KIND_IF:
+    interpreter_eval_if_stmt(interpreter, &stmt->as.if_stmt);
     break;
   default:
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_stmt).\n");
@@ -111,7 +134,7 @@ Value interpreter_eval_assignment_expr(Interpreter *interpreter,
                                        AssignmentExpr *expr) {
   Value value = interpreter_eval_expr(interpreter, expr->value);
   Symbol *symbol =
-      hashmap_get(interpreter->symbols, expr->identifier_token.lexeme);
+      symtable_get(interpreter->symbols, expr->identifier_token.lexeme);
   symbol->value = malloc(sizeof(Symbol));
   memcpy(symbol->value, &value, sizeof(Value));
 
@@ -121,7 +144,7 @@ Value interpreter_eval_assignment_expr(Interpreter *interpreter,
 Value interpreter_eval_identifier_expr(Interpreter *interpreter,
                                        IdentifierExpr *expr) {
   Symbol *symbol =
-      hashmap_get(interpreter->symbols, expr->identifier_token.lexeme);
+      symtable_get(interpreter->symbols, expr->identifier_token.lexeme);
   return *symbol->value;
 }
 
