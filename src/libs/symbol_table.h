@@ -30,4 +30,7 @@ void symtable_put(SymbolTable *table, Symbol symbol);
 b8 symtable_has(SymbolTable *table, StringView identifier);
 Symbol *symtable_get(SymbolTable *table, StringView identifier);
 
+b8 symtable_scope_has(SymbolTable *table, StringView identifier);
+Symbol *symtable_scope_get(SymbolTable *table, StringView identifier);
+
 #endif // BEE_SYMBOL_TABLE_H

@@ -321,7 +321,7 @@ IfStmt parser_parse_if_stmt(Parser *parser) {
   } else {
     ErrorContext ctx = {.source = parser->source,
                         .span = parser->current_token.span};
-    error_throw(&ctx, "expected 'then' or '=>', because if statements only "
+    error_throw(&ctx, "expected 'then' or '->', because if statements only "
                       "accept a block or expression consequent.");
   }
 
@@ -357,7 +357,7 @@ IfStmt parser_parse_if_stmt(Parser *parser) {
       ErrorContext ctx = {.source = parser->source,
                           .span = parser->current_token.span};
 
-      error_throw(&ctx, "expected 'end' keyword to close if block.");
+      error_throw(&ctx, "expected 'end' keyword to close 'if' block.");
     }
     parser_eat_token(parser);
   }
@@ -394,7 +394,7 @@ WhileStmt parser_parse_while_stmt(Parser *parser) {
   } else {
     ErrorContext ctx = {.source = parser->source,
                         .span = parser->current_token.span};
-    error_throw(&ctx, "expected 'do' or '=>', because while statements only "
+    error_throw(&ctx, "expected 'do' or '->', because while statements only "
                       "accept a block or expression body.");
   }
 
@@ -403,7 +403,7 @@ WhileStmt parser_parse_while_stmt(Parser *parser) {
       ErrorContext ctx = {.source = parser->source,
                           .span = parser->current_token.span};
 
-      error_throw(&ctx, "expected 'end' keyword to close if block.");
+      error_throw(&ctx, "expected 'end' keyword to close 'while' block.");
     }
     parser_eat_token(parser);
   }
@@ -417,6 +417,74 @@ WhileStmt parser_parse_while_stmt(Parser *parser) {
   
   return while_stmt;
 }
+
+ForStmt parser_parse_for_stmt(Parser *parser) {
+  Token keyword_token = parser_eat_token(parser);
+  Stmt init = parser_parse_stmt(parser);
+  if (init.kind != STMT_KIND_VARIABLE_DECL) {
+    ErrorContext ctx = {.source = parser->source, .span = init.span};
+    error_throw(&ctx, "unexpected init statement, 'for' expects an 'variable declaration' statement.");
+  }
+
+  if (!parser_match_token(parser, TOKEN_KIND_COMMA)) {
+    ErrorContext ctx = {.source = parser->source,
+                        .span = parser->current_token.span};
+    error_throw_fmt(&ctx, "expects ',', but received '" SV_FMT "'.",
+                    SV_ARG(parser->current_token.lexeme));
+  }
+  
+  parser_eat_token(parser);
+  Expr test = parser_parse_expr(parser);
+
+  if (!parser_match_token(parser, TOKEN_KIND_COMMA)) {
+    ErrorContext ctx = {.source = parser->source,
+                        .span = parser->current_token.span};
+    error_throw_fmt(&ctx, "expects ',', but received '" SV_FMT "'.",
+                    SV_ARG(parser->current_token.lexeme));
+  }
+
+  parser_eat_token(parser);
+  Expr update = parser_parse_expr(parser);
+
+  Stmt body = {0};
+  if (parser_match_token(parser, TOKEN_KIND_DO)) {
+    parser_eat_token(parser);
+    body.kind = STMT_KIND_BLOCK;
+    body.as.block = parser_parse_block_stmt(parser, TOKEN_KIND_END);
+    // TODO: add block span when implement multi-line spans.
+  } else if (parser_match_token(parser, TOKEN_KIND_ARROW)) {
+    parser_eat_token(parser);
+    body = parser_parse_stmt(parser);
+  } else {
+    ErrorContext ctx = {.source = parser->source,
+                        .span = parser->current_token.span};
+    error_throw(&ctx, "expected 'do' or '->', because while statements only "
+                      "accept a block or expression body.");
+  }
+
+  if (body.kind == STMT_KIND_BLOCK) {
+    if (!parser_match_token(parser, TOKEN_KIND_END)) {
+      ErrorContext ctx = {.source = parser->source,
+                          .span = parser->current_token.span};
+
+      error_throw(&ctx, "expected 'end' keyword to close 'for' block.");
+    }
+    parser_eat_token(parser);
+  }
+
+  ForStmt for_stmt = {0};
+  for_stmt.keyword_token = keyword_token;
+  for_stmt.init = malloc(sizeof(Stmt));
+  for_stmt.test = malloc(sizeof(Expr));
+  for_stmt.update = malloc(sizeof(Expr));
+  for_stmt.body = malloc(sizeof(Stmt));
+  memcpy(for_stmt.init, &init, sizeof(Stmt));
+  memcpy(for_stmt.test, &test, sizeof(Expr));
+  memcpy(for_stmt.update, &update, sizeof(Expr));
+  memcpy(for_stmt.body, &body, sizeof(Stmt));
+
+  return for_stmt;
+}  
 
 Stmt parser_parse_stmt(Parser *parser) {
   Stmt stmt = {0};
@@ -465,6 +533,16 @@ Stmt parser_parse_stmt(Parser *parser) {
                  .end = while_stmt.body->span.end};
     stmt.kind = STMT_KIND_WHILE;
     stmt.as.while_stmt = while_stmt;
+    stmt.span = span;
+    break;
+  }
+  case TOKEN_KIND_FOR: {
+    ForStmt for_stmt = parser_parse_for_stmt(parser);
+    Span span = {.line = for_stmt.keyword_token.span.line,
+                 .start = for_stmt.keyword_token.span.start,
+                 .end = for_stmt.update->span.end};
+    stmt.kind = STMT_KIND_FOR;
+    stmt.as.for_stmt = for_stmt;
     stmt.span = span;
     break;
   }    

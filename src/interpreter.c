@@ -35,10 +35,15 @@ void interpreter_eval_expr_stmt(Interpreter *interpreter, ExprStmt *stmt) {
 void interpreter_eval_variable_decl_stmt(Interpreter *interpreter,
                                          VariableDeclStmt *stmt) {
   Value value = interpreter_eval_expr(interpreter, &stmt->value);
-  Symbol *symbol =
-      symtable_get(interpreter->symbols, stmt->identifier_token.lexeme);
-  symbol->value = malloc(sizeof(Value));
-  memcpy(symbol->value, &value, sizeof(Value));
+  Symbol symbol = {
+      .value_expr = &stmt->value,
+      .value = malloc(sizeof(Value)),
+      .constant =
+          string_view_is_equal(stmt->keyword_token.lexeme, SV_LIT("const")),
+      .identifier = stmt->identifier_token.lexeme,
+  };
+  memcpy(symbol.value, &value, sizeof(Value));
+  symtable_put(interpreter->symbols, symbol);
 }
 
 void interpreter_eval_echo_stmt(Interpreter *interpreter, EchoStmt *stmt) {
@@ -92,7 +97,23 @@ void interpreter_eval_while_stmt(Interpreter *interpreter, WhileStmt *stmt) {
   }
 
   interpreter->symbols = scope.parent;
-  symtable_destroy(&scope);  
+  symtable_destroy(&scope);
+}
+
+void interpreter_eval_for_stmt(Interpreter *interpreter, ForStmt *stmt) {
+  SymbolTable scope = symtable_new(interpreter->symbols);
+  interpreter->symbols = &scope;
+  interpreter_eval_stmt(interpreter, stmt->init);
+  
+  Value test = interpreter_eval_expr(interpreter, stmt->test);  
+  while (test.as.boolean) {
+    interpreter_eval_stmt(interpreter, stmt->body);
+    interpreter_eval_expr(interpreter, stmt->update);
+    test = interpreter_eval_expr(interpreter, stmt->test);
+  }
+
+  interpreter->symbols = scope.parent;
+  symtable_destroy(&scope);
 }  
 
 void interpreter_eval_stmt(Interpreter *interpreter, Stmt *stmt) {
@@ -114,6 +135,9 @@ void interpreter_eval_stmt(Interpreter *interpreter, Stmt *stmt) {
     break;
   case STMT_KIND_WHILE:
     interpreter_eval_while_stmt(interpreter, &stmt->as.while_stmt);
+    break;
+  case STMT_KIND_FOR:
+    interpreter_eval_for_stmt(interpreter, &stmt->as.for_stmt);
     break;
   default:
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_stmt).\n");

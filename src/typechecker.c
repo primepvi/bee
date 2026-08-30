@@ -47,7 +47,7 @@ void tc_check(TypeChecker *tc) {
 
 void tc_check_variable_decl_stmt(TypeChecker *tc, Stmt *stmt) {
   VariableDeclStmt *decl = &stmt->as.variable_decl;
-  if (symtable_has(tc->symbols, decl->identifier_token.lexeme)) {
+  if (symtable_scope_has(tc->symbols, decl->identifier_token.lexeme)) {
     ErrorContext ctx = {.source = tc->source,
                         .span = decl->identifier_token.span};
     error_throw_fmt(&ctx, "variable " SV_FMT " is already declared.",
@@ -110,11 +110,31 @@ void tc_check_while_stmt(TypeChecker *tc, Stmt *stmt) {
                     "condition of type '" SV_FMT "'.",
                     SV_ARG(condition_type.identifier));
   }
-
-  tc->symbols = scope.parent;
-  symtable_destroy(&scope);
   
   tc_check_stmt(tc, while_stmt->body);  
+  tc->symbols = scope.parent;
+  symtable_destroy(&scope);
+}
+
+void tc_check_for_stmt(TypeChecker *tc, Stmt *stmt) {
+  ForStmt *for_stmt = &stmt->as.for_stmt;
+  SymbolTable scope = symtable_new(tc->symbols);
+  tc->symbols = &scope;
+  tc_check_stmt(tc, for_stmt->init);
+  
+  Type test_type = tc_check_expr(tc, for_stmt->test);
+  if (!type_is(test_type, SV_LIT("bool"))) {
+    ErrorContext ctx = {.source = tc->source, .span = for_stmt->test->span};
+    error_throw_fmt(&ctx,
+                    "for test expression must be of type 'bool', but received an "
+                    "test expression of type '" SV_FMT "'.",
+                    SV_ARG(test_type.identifier));
+  }
+
+  tc_check_expr(tc, for_stmt->update);
+  tc_check_stmt(tc, for_stmt->body);
+  tc->symbols = scope.parent;
+  symtable_destroy(&scope);
 }
 
 void tc_check_stmt(TypeChecker *tc, Stmt *stmt) {
@@ -145,6 +165,10 @@ void tc_check_stmt(TypeChecker *tc, Stmt *stmt) {
     tc_check_while_stmt(tc, stmt);
     break;
   }
+  case STMT_KIND_FOR: {
+    tc_check_for_stmt(tc, stmt);
+    break;
+  }    
   default: {
     fprintf(stderr, "ERROR: unreachable (tc_check_stmt).\n");
     exit(1);

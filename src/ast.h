@@ -27,6 +27,7 @@ typedef enum {
   TOKEN_KIND_IF,
   TOKEN_KIND_ELSE,
   TOKEN_KIND_WHILE,
+  TOKEN_KIND_FOR,
   TOKEN_KIND_DO,
   TOKEN_KIND_IDENTIFIER,
 
@@ -44,6 +45,7 @@ typedef enum {
   TOKEN_KIND_EQEQ,
   TOKEN_KIND_NEQ,
   TOKEN_KIND_ARROW,
+  TOKEN_KIND_COMMA,
 
   TOKEN_KIND_PLUS,
   TOKEN_KIND_MINUS,
@@ -144,6 +146,7 @@ typedef enum {
   STMT_KIND_IF,
   STMT_KIND_BLOCK,
   STMT_KIND_WHILE,
+  STMT_KIND_FOR,
 } StmtKind;
 
 typedef struct {
@@ -177,7 +180,15 @@ typedef struct {
   Token keyword_token;
   Expr *condition;
   Stmt *body;
-} WhileStmt; 
+} WhileStmt;
+
+typedef struct {
+  Token keyword_token;
+  Stmt *init;
+  Expr *test;
+  Expr *update;
+  Stmt *body;
+} ForStmt;  
 
 typedef struct Stmt {
   StmtKind kind;
@@ -185,9 +196,10 @@ typedef struct Stmt {
     VariableDeclStmt variable_decl;
     ExprStmt expr;
     EchoStmt echo;
+    BlockStmt block;    
     IfStmt if_stmt;
-    BlockStmt block;
     WhileStmt while_stmt;
+    ForStmt for_stmt;
   } as;
   Span span;
 } Stmt;

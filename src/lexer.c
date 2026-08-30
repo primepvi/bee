@@ -88,6 +88,8 @@ Token lexer_next_token(Lexer *l) {
       kind = TOKEN_KIND_ELSE;
     } else if (string_view_is_equal(name, SV_LIT("while"))) {
       kind = TOKEN_KIND_WHILE;
+    } else if (string_view_is_equal(name, SV_LIT("for"))) {
+      kind = TOKEN_KIND_FOR;
     } else if (string_view_is_equal(name, SV_LIT("do"))) {
       kind = TOKEN_KIND_DO;
     }
@@ -128,7 +130,7 @@ Token lexer_next_token(Lexer *l) {
   } else if (string_view_is_equal(operator, SV_LIT("<="))) {
     span.end += 1;
     kind = TOKEN_KIND_LTE;
-  } else if (string_view_is_equal(operator, SV_LIT("=>"))) {
+  } else if (string_view_is_equal(operator, SV_LIT("->"))) {
     span.end += 1;
     kind = TOKEN_KIND_ARROW;
   } else {
@@ -165,6 +167,9 @@ Token lexer_next_token(Lexer *l) {
       break;
     case ')':
       kind = TOKEN_KIND_CLOSE_PAREN;
+      break;
+    case ',':
+      kind = TOKEN_KIND_COMMA;
       break;
     default: {
       ErrorContext ctx = {.source = l->source, .span = span};

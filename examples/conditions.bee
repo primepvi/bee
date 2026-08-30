@@ -3,15 +3,8 @@ let b = true
 let c = false
 
 if a then
-    if b and c then
-        echo("A and B and C")
-    else
-        echo("A, but no B and C")
-    end
-
-    echo(a)
-    echo(b)
-    echo(c)
+    if b and c -> echo("A and B and C")
+    else -> echo("A, but no B and C")	
 else
     echo("no A")
 end

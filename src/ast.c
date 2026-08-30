@@ -15,6 +15,9 @@ const char *const TOKEN_NAMES[TOKEN_KIND_KEY_COUNT] = {
     [TOKEN_KIND_END] = "End",
     [TOKEN_KIND_IF] = "If",
     [TOKEN_KIND_ELSE] = "Else",
+    [TOKEN_KIND_WHILE] = "While",
+    [TOKEN_KIND_FOR] = "For",
+    [TOKEN_KIND_DO] = "Do",
     [TOKEN_KIND_IDENTIFIER] = "Identifier",
     [TOKEN_KIND_NUMBER] = "Number",
     [TOKEN_KIND_STRING] = "String",
@@ -190,6 +193,40 @@ static void ast_print_stmt(const Stmt *stmt, u32 depth) {
       printf("Alternate\n");
       ast_print_stmt(if_stmt->alternate, depth + 2);
     }
+    break;
+  }
+  case STMT_KIND_WHILE: {
+    const WhileStmt *while_stmt = &stmt->as.while_stmt;
+    printf("While\n");
+    
+    print_indent(depth + 1);
+    printf("Condition\n");
+    ast_print_expr(while_stmt->condition, depth + 2);
+    
+    print_indent(depth + 1);
+    printf("Body\n");
+    ast_print_stmt(while_stmt->body, depth + 2);
+    break;
+  }
+  case STMT_KIND_FOR: {
+    const ForStmt *for_stmt = &stmt->as.for_stmt;
+    printf("For\n");
+
+    print_indent(depth + 1);
+    printf("Init\n");
+    ast_print_stmt(for_stmt->init, depth + 2);
+
+    print_indent(depth + 1);
+    printf("Test\n");
+    ast_print_expr(for_stmt->test, depth + 2);
+
+    print_indent(depth + 1);
+    printf("Update\n");
+    ast_print_expr(for_stmt->update, depth + 2);
+
+    print_indent(depth + 1);
+    printf("Body\n");
+    ast_print_stmt(for_stmt->body, depth + 2);
     break;
   }    
   }
