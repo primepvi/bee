@@ -99,19 +99,20 @@ void tc_check_if_stmt(TypeChecker *tc, Stmt *stmt) {
 void tc_check_while_stmt(TypeChecker *tc, Stmt *stmt) {
   WhileStmt *while_stmt = &stmt->as.while_stmt;
   Type condition_type = tc_check_expr(tc, while_stmt->condition);
-  
+
   SymbolTable scope = symtable_new(tc->symbols);
   tc->symbols = &scope;
- 
+
   if (!type_is(condition_type, SV_LIT("bool"))) {
-    ErrorContext ctx = {.source = tc->source, .span = while_stmt->condition->span};
+    ErrorContext ctx = {.source = tc->source,
+                        .span = while_stmt->condition->span};
     error_throw_fmt(&ctx,
                     "while condition must be of type 'bool', but received an "
                     "condition of type '" SV_FMT "'.",
                     SV_ARG(condition_type.identifier));
   }
-  
-  tc_check_stmt(tc, while_stmt->body);  
+
+  tc_check_stmt(tc, while_stmt->body);
   tc->symbols = scope.parent;
   symtable_destroy(&scope);
 }
@@ -121,14 +122,15 @@ void tc_check_for_stmt(TypeChecker *tc, Stmt *stmt) {
   SymbolTable scope = symtable_new(tc->symbols);
   tc->symbols = &scope;
   tc_check_stmt(tc, for_stmt->init);
-  
+
   Type test_type = tc_check_expr(tc, for_stmt->test);
   if (!type_is(test_type, SV_LIT("bool"))) {
     ErrorContext ctx = {.source = tc->source, .span = for_stmt->test->span};
-    error_throw_fmt(&ctx,
-                    "for test expression must be of type 'bool', but received an "
-                    "test expression of type '" SV_FMT "'.",
-                    SV_ARG(test_type.identifier));
+    error_throw_fmt(
+        &ctx,
+        "for test expression must be of type 'bool', but received an "
+        "test expression of type '" SV_FMT "'.",
+        SV_ARG(test_type.identifier));
   }
 
   tc_check_expr(tc, for_stmt->update);
@@ -168,7 +170,7 @@ void tc_check_stmt(TypeChecker *tc, Stmt *stmt) {
   case STMT_KIND_FOR: {
     tc_check_for_stmt(tc, stmt);
     break;
-  }    
+  }
   default: {
     fprintf(stderr, "ERROR: unreachable (tc_check_stmt).\n");
     exit(1);
@@ -318,6 +320,32 @@ Type tc_check_assignment_expr(TypeChecker *tc, Expr *expr) {
   return type;
 }
 
+Type tc_check_when_expr(TypeChecker *tc, Expr *expr) {
+  WhenExpr *when = &expr->as.when;
+  Type condition_type = tc_check_expr(tc, when->condition);
+  if (!type_is(condition_type, SV_LIT("bool"))) {
+    ErrorContext ctx = {.source = tc->source, .span = when->condition->span};
+    error_throw_fmt(&ctx,
+                    "when condition must be of type 'bool', but received an "
+                    "condition of type '" SV_FMT "'.",
+                    SV_ARG(condition_type.identifier));
+  }
+
+  Type consequent_type = tc_check_expr(tc, when->consequent);
+  Type alternate_type = tc_check_expr(tc, when->alternate);
+  if (!type_is_equal(consequent_type, alternate_type)) {
+    ErrorContext ctx = {.source = tc->source, .span = expr->span};
+    error_throw_fmt(&ctx,
+                    "when 'consequent' and 'alternate' values must be of same "
+                    "type, but received a 'consequent' of type '" SV_FMT
+                    "' and an 'alternate' of type '" SV_FMT "'.",
+                    SV_ARG(consequent_type.identifier),
+                    SV_ARG(alternate_type.identifier));
+  }
+
+  return consequent_type;
+}
+
 Type tc_check_expr(TypeChecker *tc, Expr *expr) {
   switch (expr->kind) {
   case EXPR_KIND_LITERAL:
@@ -334,6 +362,8 @@ Type tc_check_expr(TypeChecker *tc, Expr *expr) {
     return tc_check_logical_expr(tc, expr);
   case EXPR_KIND_ASSIGNMENT:
     return tc_check_assignment_expr(tc, expr);
+  case EXPR_KIND_WHEN:
+    return tc_check_when_expr(tc, expr);
   default: {
     fprintf(stderr, "ERROR: unreachable (tc_check_expr).\n");
     exit(1);

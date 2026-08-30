@@ -29,6 +29,8 @@ typedef enum {
   TOKEN_KIND_WHILE,
   TOKEN_KIND_FOR,
   TOKEN_KIND_DO,
+  TOKEN_KIND_WHEN,
+  TOKEN_KIND_OTHERWISE,
   TOKEN_KIND_IDENTIFIER,
 
   TOKEN_KIND_NUMBER,
@@ -88,6 +90,7 @@ typedef enum {
   EXPR_KIND_LOGICAL,
   EXPR_KIND_UNARY,
   EXPR_KIND_PARENTHESIZED,
+  EXPR_KIND_WHEN,
 } ExprKind;
 
 typedef struct {
@@ -125,6 +128,14 @@ typedef struct {
   Expr *expr;
 } ParenthesizedExpr;
 
+typedef struct {
+  Token when_token;
+  Token otherwise_token;  
+  Expr *condition;
+  Expr *consequent;
+  Expr *alternate;
+} WhenExpr;  
+
 typedef struct Expr {
   ExprKind kind;
   Span span;
@@ -136,6 +147,7 @@ typedef struct Expr {
     LogicalExpr logical;
     UnaryExpr unary;
     ParenthesizedExpr parenthesized;
+    WhenExpr when;
   } as;
 } Expr;
 

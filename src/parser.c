@@ -84,6 +84,44 @@ ParenthesizedExpr parser_parse_parenthesized_expr(Parser *parser) {
                              .expr = expr};
 }
 
+WhenExpr parser_parse_when_expr(Parser *parser) {
+  Token when_token = parser_eat_token(parser);
+  Expr condition = parser_parse_expr(parser);
+
+  if (!parser_match_token(parser, TOKEN_KIND_THEN)) {
+    ErrorContext ctx = {.source = parser->source,
+                        .span = parser->current_token.span};
+    error_throw_fmt(
+        &ctx, "when expression expects 'then' keyword, but received '" SV_FMT "'.",
+        SV_ARG(parser->current_token.lexeme));
+  }
+  parser_eat_token(parser);
+  Expr consequent = parser_parse_expr(parser);
+
+  if (!parser_match_token(parser, TOKEN_KIND_OTHERWISE)) {
+    ErrorContext ctx = {.source = parser->source,
+                        .span = parser->current_token.span};
+    error_throw_fmt(
+        &ctx, "when expression expects 'otherwise' keyword, but received '" SV_FMT "'.",
+        SV_ARG(parser->current_token.lexeme));    
+  }
+  Token otherwise_token = parser_eat_token(parser);
+  Expr alternate = parser_parse_expr(parser);
+
+  WhenExpr when = {0};
+  when.when_token = when_token;
+  when.otherwise_token = otherwise_token;
+  when.condition = malloc(sizeof(Expr));
+  when.consequent = malloc(sizeof(Expr));
+  when.alternate = malloc(sizeof(Expr));
+
+  memcpy(when.condition, &condition, sizeof(Expr));
+  memcpy(when.consequent, &consequent, sizeof(Expr));
+  memcpy(when.alternate, &alternate, sizeof(Expr));
+
+  return when;
+}
+
 Expr parser_parse_primary_expr(Parser *parser) {
   Expr expr = {0};
   switch (parser->current_token.kind) {
@@ -128,6 +166,16 @@ Expr parser_parse_primary_expr(Parser *parser) {
       expr.as.identifier = identifier;
       expr.span = identifier_token.span;
     }
+    break;
+  }
+  case TOKEN_KIND_WHEN: {
+    WhenExpr when = parser_parse_when_expr(parser);
+    Span span = {.line = when.when_token.span.line,
+                 .start = when.when_token.span.start,
+                 .end = when.alternate->span.end};
+    expr.kind = EXPR_KIND_WHEN;
+    expr.as.when = when;
+    expr.span = span;
     break;
   }
   default: {
@@ -409,12 +457,12 @@ WhileStmt parser_parse_while_stmt(Parser *parser) {
   }
 
   WhileStmt while_stmt = {0};
-  while_stmt.keyword_token = keyword_token;  
+  while_stmt.keyword_token = keyword_token;
   while_stmt.body = malloc(sizeof(Stmt));
   while_stmt.condition = malloc(sizeof(Expr));
   memcpy(while_stmt.body, &body, sizeof(Stmt));
   memcpy(while_stmt.condition, &condition, sizeof(Expr));
-  
+
   return while_stmt;
 }
 
@@ -423,7 +471,8 @@ ForStmt parser_parse_for_stmt(Parser *parser) {
   Stmt init = parser_parse_stmt(parser);
   if (init.kind != STMT_KIND_VARIABLE_DECL) {
     ErrorContext ctx = {.source = parser->source, .span = init.span};
-    error_throw(&ctx, "unexpected init statement, 'for' expects an 'variable declaration' statement.");
+    error_throw(&ctx, "unexpected init statement, 'for' expects an 'variable "
+                      "declaration' statement.");
   }
 
   if (!parser_match_token(parser, TOKEN_KIND_COMMA)) {
@@ -432,7 +481,7 @@ ForStmt parser_parse_for_stmt(Parser *parser) {
     error_throw_fmt(&ctx, "expects ',', but received '" SV_FMT "'.",
                     SV_ARG(parser->current_token.lexeme));
   }
-  
+
   parser_eat_token(parser);
   Expr test = parser_parse_expr(parser);
 
@@ -484,7 +533,7 @@ ForStmt parser_parse_for_stmt(Parser *parser) {
   memcpy(for_stmt.body, &body, sizeof(Stmt));
 
   return for_stmt;
-}  
+}
 
 Stmt parser_parse_stmt(Parser *parser) {
   Stmt stmt = {0};
@@ -545,7 +594,7 @@ Stmt parser_parse_stmt(Parser *parser) {
     stmt.as.for_stmt = for_stmt;
     stmt.span = span;
     break;
-  }    
+  }
   default: {
     ExprStmt expr = parser_parse_expr_stmt(parser);
     stmt.kind = STMT_KIND_EXPR;

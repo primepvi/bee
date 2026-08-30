@@ -338,6 +338,15 @@ Value interpreter_eval_unary_expr(Interpreter *interpreter, UnaryExpr *unary) {
   return value;
 }
 
+Value interpreter_eval_when_expr(Interpreter *interpreter, WhenExpr *when) {
+  Value condition = interpreter_eval_expr(interpreter, when->condition);
+  if (condition.as.boolean) {
+    return interpreter_eval_expr(interpreter, when->consequent);
+  } else {
+    return interpreter_eval_expr(interpreter, when->alternate);
+  }
+}  
+
 Value interpreter_eval_expr(Interpreter *interpreter, Expr *expr) {
   switch (expr->kind) {
   case EXPR_KIND_LITERAL:
@@ -354,6 +363,8 @@ Value interpreter_eval_expr(Interpreter *interpreter, Expr *expr) {
     return interpreter_eval_expr(interpreter, expr->as.parenthesized.expr);
   case EXPR_KIND_UNARY:
     return interpreter_eval_unary_expr(interpreter, &expr->as.unary);
+  case EXPR_KIND_WHEN:
+    return interpreter_eval_when_expr(interpreter, &expr->as.when);
   default:
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_expr).\n");
     exit(1);

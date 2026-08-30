@@ -18,6 +18,8 @@ const char *const TOKEN_NAMES[TOKEN_KIND_KEY_COUNT] = {
     [TOKEN_KIND_WHILE] = "While",
     [TOKEN_KIND_FOR] = "For",
     [TOKEN_KIND_DO] = "Do",
+    [TOKEN_KIND_WHEN] = "When",
+    [TOKEN_KIND_OTHERWISE] = "Otherwise",
     [TOKEN_KIND_IDENTIFIER] = "Identifier",
     [TOKEN_KIND_NUMBER] = "Number",
     [TOKEN_KIND_STRING] = "String",
@@ -128,6 +130,23 @@ static void ast_print_expr(const Expr *expr, u32 depth) {
     print_indent(depth + 1);
     printf("Operand\n");
     ast_print_expr(unary->operand, depth + 2);
+    break;
+  }
+  case EXPR_KIND_WHEN: {
+    const WhenExpr *when = &expr->as.when;
+    printf("When\n");
+
+    print_indent(depth + 1);
+    printf("Condition\n");
+    ast_print_expr(when->condition, depth + 2);
+
+    print_indent(depth + 1);
+    printf("Consequent\n");
+    ast_print_expr(when->consequent, depth + 2);
+
+    print_indent(depth + 1);
+    printf("Alternate\n");
+    ast_print_expr(when->alternate, depth + 2);
     break;
   }    
   }

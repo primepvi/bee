@@ -92,6 +92,10 @@ Token lexer_next_token(Lexer *l) {
       kind = TOKEN_KIND_FOR;
     } else if (string_view_is_equal(name, SV_LIT("do"))) {
       kind = TOKEN_KIND_DO;
+    } else if (string_view_is_equal(name, SV_LIT("when"))) {
+      kind = TOKEN_KIND_WHEN;
+    } else if (string_view_is_equal(name, SV_LIT("otherwise"))) {
+      kind = TOKEN_KIND_OTHERWISE;
     }
 
     l->cursor += name.length;
