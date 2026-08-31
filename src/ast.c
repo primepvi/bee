@@ -151,6 +151,20 @@ static void ast_print_expr(const Expr *expr, u32 depth) {
     printf("Alternate\n");
     ast_print_expr(when->alternate, depth + 2);
     break;
+  }
+  case EXPR_KIND_CALL: {
+    const CallExpr *call = &expr->as.call;
+    printf("CallExpr (" SV_FMT ")\n",
+           SV_ARG(call->identifier_token.lexeme));
+
+    print_indent(depth + 1);
+    printf("Arguments\n");
+    for (u32 i = 0; i < array_list_length(call->arguments); i++) {
+      Expr *argument = array_list_at(call->arguments, i);
+      ast_print_expr(argument, depth + 2);
+    }
+    
+    break;
   }    
   }
 }
@@ -275,6 +289,15 @@ static void ast_print_stmt(const Stmt *stmt, u32 depth) {
     print_indent(depth + 1);
     printf("Body\n");
     ast_print_stmt(for_stmt->body, depth + 2);
+    break;
+  }
+  case STMT_KIND_RETURN: {
+    const ReturnStmt *ret = &stmt->as.return_stmt;
+    printf("Return\n");
+    
+    print_indent(depth + 1);
+    printf("Value\n");
+    ast_print_expr(&ret->expr, depth + 2);
     break;
   }    
   }
