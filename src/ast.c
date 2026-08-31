@@ -205,13 +205,13 @@ static void ast_print_stmt(const Stmt *stmt, u32 depth) {
       printf("Param\n");
 
       print_indent(depth + 3);
-      printf("Identifier: '" SV_FMT "', Type: '" SV_FMT "'\n",
+      printf("Identifier: '" SV_FMT "', Type: '" SV_FMT "%c'\n",
              SV_ARG(param->identifier_token.lexeme),
-             SV_ARG(param->type_identifier_token.lexeme));      
+             SV_ARG(param->type_annotation.identifier_token.lexeme), param->type_annotation.nullable ? '?' : ' ');      
     }
 
     print_indent(depth + 1);
-    printf("Return: " SV_FMT "\n", SV_ARG(decl->return_type_identifier_token.lexeme));
+    printf("Return: " SV_FMT "%c\n", SV_ARG(decl->type_annotation.identifier_token.lexeme), decl->type_annotation.nullable ? '?' : ' ');
 
     print_indent(depth + 1);
     printf("Body\n");

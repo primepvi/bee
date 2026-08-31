@@ -41,6 +41,7 @@ typedef enum {
 
   TOKEN_KIND_COLON,
   TOKEN_KIND_SEMICOLON,
+  TOKEN_KIND_QUESTION,
   TOKEN_KIND_EQUAL,
   TOKEN_KIND_OPEN_PAREN,
   TOKEN_KIND_CLOSE_PAREN,
@@ -183,24 +184,31 @@ typedef enum {
 } StmtKind;
 
 typedef struct {
+  Token colon_token;
+  Token identifier_token;
+  b8 nullable;
+  Span span;
+} TypeAnnotation;  
+
+typedef struct {
   Token keyword_token;
   Token identifier_token;
   Token assignment_token;
-  Token *type_identifier_token;
+  TypeAnnotation *type_annotation;
   Expr value;
 } VariableDeclStmt;
 
 typedef struct {
   Token keyword_token;
   Token identifier_token;
-  Token return_type_identifier_token;
+  TypeAnnotation type_annotation;
   ArrayList *params;
   Stmt *body;
 } FunctionDeclStmt;
 
 typedef struct {
   Token identifier_token;
-  Token type_identifier_token;
+  TypeAnnotation type_annotation;
 } FunctionDeclParam;
 
 typedef struct {

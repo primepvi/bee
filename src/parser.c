@@ -137,22 +137,21 @@ CallExpr parser_parse_call_expr(Parser *parser, Token identifier_token) {
       parser_eat_token(parser);
     } else {
       break;
-    }      
+    }
   }
-  
+
   if (!parser_match_token(parser, TOKEN_KIND_CLOSE_PAREN)) {
     ErrorContext ctx = {.source = parser->source,
                         .span = parser->current_token.span};
     error_throw(&ctx, "expects ')' to close function call.");
   }
-  
-  Token close_paren_token = parser_eat_token(parser);
-  return (CallExpr) {
-    .identifier_token = identifier_token, .open_paren_token = open_paren_token,
-    .close_paren_token = close_paren_token, .arguments = arguments
-  };
-}
 
+  Token close_paren_token = parser_eat_token(parser);
+  return (CallExpr){.identifier_token = identifier_token,
+                    .open_paren_token = open_paren_token,
+                    .close_paren_token = close_paren_token,
+                    .arguments = arguments};
+}
 
 b8 parser_can_start_expr(Parser *parser) {
   switch (parser->current_token.kind) {
@@ -333,6 +332,42 @@ ExprStmt parser_parse_expr_stmt(Parser *parser) {
   return (ExprStmt){.expr = expr};
 }
 
+TypeAnnotation parser_parse_type_annotation(Parser *parser) {
+  if (!parser_match_token(parser, TOKEN_KIND_COLON)) {
+    ErrorContext ctx = {.source = parser->source,
+                        .span = parser->current_token.span};
+
+    error_throw_fmt(&ctx, "expected ':type', but received '" SV_FMT "'",
+                    SV_ARG(parser->current_token.lexeme));
+  }
+
+  Token colon_token = parser_eat_token(parser);
+  if (!parser_match_token(parser, TOKEN_KIND_IDENTIFIER)) {
+    ErrorContext ctx = {.source = parser->source,
+                        .span = parser->current_token.span};
+
+    error_throw_fmt(&ctx, "expected param type name, but received '" SV_FMT "'",
+                    SV_ARG(parser->current_token.lexeme));
+  }
+
+  Token identifier_token = parser_eat_token(parser);
+
+  b8 nullable = false;
+  if (parser_match_token(parser, TOKEN_KIND_QUESTION)) {
+    parser_eat_token(parser);
+    nullable = true;
+  }
+
+  Span span = {.line = identifier_token.span.line,
+               .start = colon_token.span.start,
+               .end = nullable ? identifier_token.span.end + 1
+                               : identifier_token.span.end};
+  return (TypeAnnotation){.colon_token = colon_token,
+                          .identifier_token = identifier_token,
+                          .nullable = nullable,
+                          .span = span};
+}
+
 VariableDeclStmt parser_parse_variable_decl_stmt(Parser *parser) {
   Token keyword_token = parser_eat_token(parser);
   if (!parser_match_token(parser, TOKEN_KIND_IDENTIFIER)) {
@@ -345,20 +380,11 @@ VariableDeclStmt parser_parse_variable_decl_stmt(Parser *parser) {
   }
 
   Token identifier_token = parser_eat_token(parser);
-  Token *type_identifier_token = NULL;
+  TypeAnnotation *type_annotation = NULL;
   if (parser_match_token(parser, TOKEN_KIND_COLON)) {
-    parser_eat_token(parser);
-    if (!parser_match_token(parser, TOKEN_KIND_IDENTIFIER)) {
-      ErrorContext ctx = {.source = parser->source,
-                          .span = parser->current_token.span};
-
-      error_throw_fmt(&ctx, "expected type name, but received '" SV_FMT "'",
-                      SV_ARG(parser->current_token.lexeme));
-    }
-
-    type_identifier_token = malloc(sizeof(Token));
-    Token type = parser_eat_token(parser);
-    memcpy(type_identifier_token, &type, sizeof(Token));
+    TypeAnnotation annotation = parser_parse_type_annotation(parser);
+    type_annotation = malloc(sizeof(TypeAnnotation));
+    memcpy(type_annotation, &annotation, sizeof(TypeAnnotation));
   }
 
   if (!parser_match_token(parser, TOKEN_KIND_EQUAL)) {
@@ -374,7 +400,7 @@ VariableDeclStmt parser_parse_variable_decl_stmt(Parser *parser) {
   return (VariableDeclStmt){.keyword_token = keyword_token,
                             .identifier_token = identifier_token,
                             .assignment_token = assignment_token,
-                            .type_identifier_token = type_identifier_token,
+                            .type_annotation = type_annotation,
                             .value = value};
 }
 
@@ -429,30 +455,11 @@ FunctionDeclStmt parser_parse_function_decl_stmt(Parser *parser) {
       error_throw_fmt(&ctx, "expected an param name, but received '" SV_FMT "'",
                       SV_ARG(parser->current_token.lexeme));
     }
-
     Token identifier_token = parser_eat_token(parser);
-    if (!parser_match_token(parser, TOKEN_KIND_COLON)) {
-      ErrorContext ctx = {.source = parser->source,
-                          .span = parser->current_token.span};
-
-      error_throw_fmt(&ctx, "expected ':type', but received '" SV_FMT "'",
-                      SV_ARG(parser->current_token.lexeme));
-    }
-
-    parser_eat_token(parser);
-    if (!parser_match_token(parser, TOKEN_KIND_IDENTIFIER)) {
-      ErrorContext ctx = {.source = parser->source,
-                          .span = parser->current_token.span};
-
-      error_throw_fmt(&ctx,
-                      "expected param type name, but received '" SV_FMT "'",
-                      SV_ARG(parser->current_token.lexeme));
-    }
-
-    Token type_identifier_token = parser_eat_token(parser);
+    TypeAnnotation type_annotation = parser_parse_type_annotation(parser);
     FunctionDeclParam param = {0};
     param.identifier_token = identifier_token;
-    param.type_identifier_token = type_identifier_token;
+    param.type_annotation = type_annotation;
     array_list_push(params, &param);
 
     if (parser_match_token(parser, TOKEN_KIND_COMMA)) {
@@ -471,26 +478,7 @@ FunctionDeclStmt parser_parse_function_decl_stmt(Parser *parser) {
   }
   parser_eat_token(parser);
 
-  if (!parser_match_token(parser, TOKEN_KIND_COLON)) {
-    ErrorContext ctx = {.source = parser->source,
-                        .span = parser->current_token.span};
-
-    error_throw_fmt(&ctx, "expected ':type', but received '" SV_FMT "'",
-                    SV_ARG(parser->current_token.lexeme));
-  }
-  parser_eat_token(parser);
-
-  if (!parser_match_token(parser, TOKEN_KIND_IDENTIFIER)) {
-    ErrorContext ctx = {.source = parser->source,
-                        .span = parser->current_token.span};
-
-    error_throw_fmt(&ctx,
-                    "expected return type name, but received '" SV_FMT "'",
-                    SV_ARG(parser->current_token.lexeme));
-  }
-
-  Token return_type_identifier_token = parser_eat_token(parser);
-
+  TypeAnnotation type_annotation = parser_parse_type_annotation(parser);  
   Stmt body = {0};
   if (parser_match_token(parser, TOKEN_KIND_ARROW)) {
     parser_eat_token(parser);
@@ -514,7 +502,7 @@ FunctionDeclStmt parser_parse_function_decl_stmt(Parser *parser) {
   FunctionDeclStmt func_decl = {0};
   func_decl.keyword_token = keyword_token;
   func_decl.identifier_token = identifier_token;
-  func_decl.return_type_identifier_token = return_type_identifier_token;
+  func_decl.type_annotation = type_annotation;
   func_decl.params = params;
   func_decl.body = malloc(sizeof(Stmt));
   memcpy(func_decl.body, &body, sizeof(Stmt));
@@ -742,13 +730,10 @@ ReturnStmt parser_parse_return_stmt(Parser *parser) {
     expr = malloc(sizeof(Expr));
     Expr return_expr = parser_parse_expr(parser);
     memcpy(expr, &return_expr, sizeof(Expr));
-  }    
-  
-  return (ReturnStmt) {
-    .keyword_token = keyword_token,
-    .expr = expr
-  };
-}  
+  }
+
+  return (ReturnStmt){.keyword_token = keyword_token, .expr = expr};
+}
 
 Stmt parser_parse_stmt(Parser *parser) {
   Stmt stmt = {0};
@@ -824,12 +809,14 @@ Stmt parser_parse_stmt(Parser *parser) {
     ReturnStmt return_stmt = parser_parse_return_stmt(parser);
     Span span = {.line = return_stmt.keyword_token.span.line,
                  .start = return_stmt.keyword_token.span.start,
-                 .end = return_stmt.expr == NULL ? return_stmt.keyword_token.span.end : return_stmt.expr->span.end};
+                 .end = return_stmt.expr == NULL
+                            ? return_stmt.keyword_token.span.end
+                            : return_stmt.expr->span.end};
     stmt.kind = STMT_KIND_RETURN;
     stmt.as.return_stmt = return_stmt;
     stmt.span = span;
     break;
-  }    
+  }
   default: {
     ExprStmt expr = parser_parse_expr_stmt(parser);
     stmt.kind = STMT_KIND_EXPR;

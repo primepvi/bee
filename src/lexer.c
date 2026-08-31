@@ -160,6 +160,9 @@ Token lexer_next_token(Lexer *l) {
     case ';':
       kind = TOKEN_KIND_SEMICOLON;
       break;
+    case '?':
+      kind = TOKEN_KIND_QUESTION;
+      break;
     case '+':
       kind = TOKEN_KIND_PLUS;
       break;

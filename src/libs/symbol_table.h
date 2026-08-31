@@ -8,6 +8,7 @@
 
 typedef struct {
   StringView identifier;
+  b8 nullable;
 } Type;
 
 typedef enum {

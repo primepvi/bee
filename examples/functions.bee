@@ -2,6 +2,8 @@ fn hello(): void
    echo "Hello, World"
 end
 
+hello()
+
 fn factorial(n: int): int
    if n < 0 -> return 0
    if n == 0 or n == 1 -> return 1
@@ -9,5 +11,12 @@ fn factorial(n: int): int
    return n * factorial(n - 1)
 end
 
-hello()
-echo factorial(5)
+fn divide(x: int, y: int): int?
+   return when y == 0 then null otherwise x / y
+end
+
+let a = factorial(5)
+let b: int? = divide(0, 0)
+
+echo a
+echo b

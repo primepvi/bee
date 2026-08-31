@@ -2,6 +2,7 @@
 #include "ast.h"
 #include "libs/array_list.h"
 #include "libs/error.h"
+#include "libs/string_builder.h"
 #include "libs/string_view.h"
 #include "libs/symbol_table.h"
 #include <stdio.h>
@@ -13,15 +14,17 @@ TypeChecker tc_create(Program *program, Source *source, SymbolTable *symbols) {
   tc.program = program;
   tc.source = source;
   tc.symbols = symbols;
+  tc.expected_return_type = (Type){.identifier = SV_LIT("void")};
 
   // builtin types
-  tc_define_type(&tc, (Type){.identifier = SV_LIT("int")});
-  tc_define_type(&tc, (Type){.identifier = SV_LIT("bool")});
-  tc_define_type(&tc, (Type){.identifier = SV_LIT("string")});
-  tc_define_type(&tc, (Type){.identifier = SV_LIT("void")});
-  tc_define_type(&tc, (Type){.identifier = SV_LIT("null")});
-  tc_define_type(&tc, (Type){.identifier = SV_LIT("function")});
-  tc.expected_return_type = tc_get_type(&tc, SV_LIT("void"));
+  tc_define_type(&tc, (Type){.identifier = SV_LIT("int"), .nullable = false});
+  tc_define_type(&tc, (Type){.identifier = SV_LIT("bool"), .nullable = false});
+  tc_define_type(&tc,
+                 (Type){.identifier = SV_LIT("string"), .nullable = false});
+  tc_define_type(&tc, (Type){.identifier = SV_LIT("void"), .nullable = false});
+  tc_define_type(&tc, (Type){.identifier = SV_LIT("null"), .nullable = false});
+  tc_define_type(&tc,
+                 (Type){.identifier = SV_LIT("function"), .nullable = false});
 
   return tc;
 }
@@ -30,10 +33,24 @@ void tc_define_type(TypeChecker *tc, Type type) {
   hashmap_put(tc->type_env, type.identifier, sizeof(Type), &type);
 }
 
-Type tc_get_type(TypeChecker *tc, StringView identifier) {
+Type tc_get_type(TypeChecker *tc, TypeAnnotation annotation) {
+  Type *type = hashmap_get(tc->type_env, annotation.identifier_token.lexeme);
+  if (type == NULL) {
+    type = hashmap_get(tc->type_env, SV_LIT("void"));
+  } else {
+    type->nullable = annotation.nullable;
+  }
+
+  return *type;
+}
+
+Type tc_get_raw_type(TypeChecker *tc, StringView identifier) {
   Type *type = hashmap_get(tc->type_env, identifier);
-  return type == NULL ? *(Type *)hashmap_get(tc->type_env, SV_LIT("void"))
-                      : *type;
+  Type result =
+      type == NULL ? *(Type *)hashmap_get(tc->type_env, SV_LIT("void")) : *type;
+  result.nullable = false;
+
+  return result;
 }
 
 void tc_check(TypeChecker *tc) {
@@ -54,22 +71,24 @@ Flow tc_check_variable_decl_stmt(TypeChecker *tc, Stmt *stmt) {
 
   Type value_type = tc_check_expr(tc, &decl->value);
   Type type = value_type;
-  if (decl->type_identifier_token != NULL) {
-    Type anotation_type = tc_get_type(tc, decl->type_identifier_token->lexeme);
-    if (type_is_empty(anotation_type)) {
+  if (decl->type_annotation != NULL) {
+    Type annotation_type = tc_get_type(tc, *decl->type_annotation);
+    if (type_is_empty(annotation_type)) {
       ErrorContext ctx = {.source = tc->source,
-                          .span = decl->type_identifier_token->span};
-      error_throw(&ctx, "attempt to anotate a variable with invalid type.");
+                          .span = decl->type_annotation->span};
+      error_throw(&ctx, "attempt to define a variable with invalid type.");
     }
 
-    if (!type_is_equal(anotation_type, value_type)) {
+    if (!type_is_assignable(annotation_type, value_type)) {
       ErrorContext ctx = {.source = tc->source, decl->value.span};
       error_throw_fmt(&ctx,
-                      "variable expects value of type '" SV_FMT
-                      "', but received value of type '" SV_FMT "'.",
-                      SV_ARG(anotation_type.identifier),
-                      SV_ARG(value_type.identifier));
+                      "variable expects value of type '%s', but received value "
+                      "of type '%s'.",
+                      type_to_string(annotation_type).buffer,
+                      type_to_string(value_type).buffer);
     }
+
+    type = annotation_type;
   } else if (type_is_empty(value_type)) {
     ErrorContext ctx = {.source = tc->source, .span = decl->value.span};
     error_throw(&ctx, "attempt to define a variable with 'void' value.");
@@ -109,10 +128,10 @@ Flow tc_check_function_decl_stmt(TypeChecker *tc, Stmt *stmt) {
   for (u32 i = 0; i < array_list_length(decl->params); i++) {
     FunctionDeclParam *param = array_list_at(decl->params, i);
 
-    Type param_type = tc_get_type(tc, param->type_identifier_token.lexeme);
+    Type param_type = tc_get_type(tc, param->type_annotation);
     if (type_is_empty(param_type)) {
       ErrorContext ctx = {.source = tc->source,
-                          .span = param->type_identifier_token.span};
+                          .span = param->type_annotation.span};
       error_throw(&ctx,
                   "attempt to anotate a function param with invalid type.");
     }
@@ -133,11 +152,12 @@ Flow tc_check_function_decl_stmt(TypeChecker *tc, Stmt *stmt) {
   }
 
   b8 return_void = string_view_is_equal(
-      decl->return_type_identifier_token.lexeme, SV_LIT("void"));
-  Type return_type = tc_get_type(tc, decl->return_type_identifier_token.lexeme);
+      decl->type_annotation.identifier_token.lexeme, SV_LIT("void"));
+
+  Type return_type = tc_get_type(tc, decl->type_annotation);
   if (!return_void && type_is_empty(return_type)) {
     ErrorContext ctx = {.source = tc->source,
-                        .span = decl->return_type_identifier_token.span};
+                        .span = decl->type_annotation.span};
     error_throw(&ctx,
                 "attempt to anotate a function with invalid return type.");
   }
@@ -206,13 +226,14 @@ Flow tc_check_if_stmt(TypeChecker *tc, Stmt *stmt) {
   Flow consequent_flow = FLOW_CONTINUE;
   Flow alternate_flow = FLOW_CONTINUE;
 
-  if (!type_is(condition_type, SV_LIT("bool"))) {
+  if (!type_is_assignable(tc_get_raw_type(tc, SV_LIT("bool")),
+                          condition_type)) {
     ErrorContext ctx = {.source = tc->source, .span = if_stmt->condition->span};
     error_throw_fmt(&ctx,
                     "The 'if' statement 'condition' must be of type 'bool', "
                     "but received an "
-                    "condition of type '" SV_FMT "'.",
-                    SV_ARG(condition_type.identifier));
+                    "condition of type '%s'.",
+                    type_to_string(condition_type));
   }
 
   consequent_flow = tc_check_stmt(tc, if_stmt->consequent);
@@ -230,14 +251,15 @@ Flow tc_check_while_stmt(TypeChecker *tc, Stmt *stmt) {
   SymbolTable scope = symtable_new(tc->symbols, SYMBOL_TABLE_KIND_BLOCK);
   tc->symbols = &scope;
 
-  if (!type_is(condition_type, SV_LIT("bool"))) {
+  if (!type_is_assignable(tc_get_raw_type(tc, SV_LIT("bool")),
+                          condition_type)) {
     ErrorContext ctx = {.source = tc->source,
                         .span = while_stmt->condition->span};
     error_throw_fmt(&ctx,
                     "The 'while' statement 'condition' must be of type 'bool', "
                     "but received an "
-                    "condition of type '" SV_FMT "'.",
-                    SV_ARG(condition_type.identifier));
+                    "condition of type '%s'.",
+                    type_to_string(condition_type).buffer);
   }
 
   Flow flow = tc_check_stmt(tc, while_stmt->body);
@@ -254,13 +276,13 @@ Flow tc_check_for_stmt(TypeChecker *tc, Stmt *stmt) {
   tc_check_stmt(tc, for_stmt->init);
 
   Type test_type = tc_check_expr(tc, for_stmt->test);
-  if (!type_is(test_type, SV_LIT("bool"))) {
+  if (!type_is_assignable(tc_get_raw_type(tc, SV_LIT("bool")), test_type)) {
     ErrorContext ctx = {.source = tc->source, .span = for_stmt->test->span};
     error_throw_fmt(&ctx,
                     "The 'for' statement 'test expression' must be of type "
                     "'bool', but received an "
-                    "test expression of type '" SV_FMT "'.",
-                    SV_ARG(test_type.identifier));
+                    "test expression of type '%s'.",
+                    type_to_string(test_type).buffer);
   }
 
   tc_check_expr(tc, for_stmt->update);
@@ -284,15 +306,15 @@ Flow tc_check_return_stmt(TypeChecker *tc, Stmt *stmt) {
     error_throw(&ctx, "attempt to return outside a function block.");
   }
 
-  
-  Type ret_type = ret->expr == NULL ? tc_get_type(tc, SV_LIT("void")) : tc_check_expr(tc, ret->expr);
-  if (!type_is_equal(ret_type, tc->expected_return_type)) {
+  Type ret_type = ret->expr == NULL ? tc_get_raw_type(tc, SV_LIT("void"))
+                                    : tc_check_expr(tc, ret->expr);
+  if (!type_is_assignable(tc->expected_return_type, ret_type)) {
     ErrorContext ctx = {.source = tc->source, .span = stmt->span};
     error_throw_fmt(&ctx,
-                    "function expects a return value of type '" SV_FMT
-                    "', but received a value of type '" SV_FMT "'.",
-                    SV_ARG(tc->expected_return_type.identifier),
-                    SV_ARG(ret_type.identifier));
+                    "function expects a return value of type '%s', but "
+                    "received a value of type '%s'.",
+                    type_to_string(tc->expected_return_type).buffer,
+                    type_to_string(ret_type).buffer);
   }
 
   return FLOW_STOP;
@@ -307,7 +329,7 @@ Flow tc_check_stmt(TypeChecker *tc, Stmt *stmt) {
       ErrorContext ctx = {.source = tc->source, .span = echo->message.span};
       error_throw(&ctx, "attempt to 'echo' a 'void' value.");
     }
-    
+
     return FLOW_CONTINUE;
   }
   case STMT_KIND_EXPR: {
@@ -340,14 +362,14 @@ Type tc_check_literal_expr(TypeChecker *tc, Expr *expr) {
   LiteralExpr *literal = &expr->as.literal;
   switch (literal->value_token.kind) {
   case TOKEN_KIND_NUMBER:
-    return tc_get_type(tc, SV_LIT("int"));
+    return tc_get_raw_type(tc, SV_LIT("int"));
   case TOKEN_KIND_TRUE:
   case TOKEN_KIND_FALSE:
-    return tc_get_type(tc, SV_LIT("bool"));
+    return tc_get_raw_type(tc, SV_LIT("bool"));
   case TOKEN_KIND_STRING:
-    return tc_get_type(tc, SV_LIT("string"));
+    return tc_get_raw_type(tc, SV_LIT("string"));
   case TOKEN_KIND_NULL:
-    return tc_get_type(tc, SV_LIT("null"));
+    return tc_get_raw_type(tc, SV_LIT("null"));
   default: {
     fprintf(stderr, "ERROR: unreachable (tc_check_literal_expr).\n");
     exit(1);
@@ -367,7 +389,7 @@ Type tc_check_identifier_expr(TypeChecker *tc, Expr *expr) {
   }
 
   return symbol->kind == SYMBOL_KIND_FUNCTION
-             ? tc_get_type(tc, SV_LIT("function"))
+             ? tc_get_raw_type(tc, SV_LIT("function"))
              : symbol->as.variable.type;
 }
 
@@ -405,14 +427,14 @@ Type tc_check_binary_expr(TypeChecker *tc, Expr *expr) {
   case TOKEN_KIND_STAR:
   case TOKEN_KIND_SLASH:
   case TOKEN_KIND_PERCENTAGE:
-    return tc_get_type(tc, SV_LIT("int"));
+    return tc_get_raw_type(tc, SV_LIT("int"));
   case TOKEN_KIND_LT:
   case TOKEN_KIND_LTE:
   case TOKEN_KIND_GT:
   case TOKEN_KIND_GTE:
   case TOKEN_KIND_EQEQ:
   case TOKEN_KIND_NEQ:
-    return tc_get_type(tc, SV_LIT("bool"));
+    return tc_get_raw_type(tc, SV_LIT("bool"));
   default: {
     fprintf(stderr, "ERROR: unreachable (tc_check_binary_expr).\n");
     exit(1);
@@ -437,7 +459,7 @@ Type tc_check_logical_expr(TypeChecker *tc, Expr *expr) {
   switch (logical->operator_token.kind) {
   case TOKEN_KIND_AND:
   case TOKEN_KIND_OR:
-    return tc_get_type(tc, SV_LIT("bool"));
+    return tc_get_raw_type(tc, SV_LIT("bool"));
   default: {
     fprintf(stderr, "ERROR: unreachable (tc_check_logical_expr).\n");
     exit(1);
@@ -473,20 +495,17 @@ Type tc_check_assignment_expr(TypeChecker *tc, Expr *expr) {
   }
 
   Type type = tc_check_expr(tc, assignment->value);
-  if (!type_is_equal(type, variable->type)) {
+  if (!type_is_assignable(variable->type, type)) {
     ErrorContext ctx = {
         .source = tc->source,
         .span = expr->span,
     };
-    error_throw_fmt(&ctx,
-                    "attempt to assign a '" SV_FMT "' value to a '" SV_FMT
-                    "' variable.",
-                    SV_ARG(type.identifier), SV_ARG(variable->type.identifier));
+    error_throw_fmt(&ctx, "attempt to assign a '%s' value to a '%s' variable.",
+                    type_to_string(type).buffer,
+                    type_to_string(variable->type).buffer);
   }
 
-  variable->type = type;
   variable->value_expr = assignment->value;
-
   return type;
 }
 
@@ -497,23 +516,42 @@ Type tc_check_when_expr(TypeChecker *tc, Expr *expr) {
     ErrorContext ctx = {.source = tc->source, .span = when->condition->span};
     error_throw_fmt(&ctx,
                     "when condition must be of type 'bool', but received an "
-                    "condition of type '" SV_FMT "'.",
-                    SV_ARG(condition_type.identifier));
+                    "condition of type '%s'.",
+                    type_to_string(condition_type).buffer);
   }
 
   Type consequent_type = tc_check_expr(tc, when->consequent);
   Type alternate_type = tc_check_expr(tc, when->alternate);
-  if (!type_is_equal(consequent_type, alternate_type)) {
-    ErrorContext ctx = {.source = tc->source, .span = expr->span};
-    error_throw_fmt(&ctx,
-                    "when 'consequent' and 'alternate' values must be of same "
-                    "type, but received a 'consequent' of type '" SV_FMT
-                    "' and an 'alternate' of type '" SV_FMT "'.",
-                    SV_ARG(consequent_type.identifier),
-                    SV_ARG(alternate_type.identifier));
+
+  Type expected, received;
+  if (type_is(consequent_type, SV_LIT("null"))) {
+    received = consequent_type;
+    expected = alternate_type;
+    expected.nullable = true;
+  } else if (type_is(alternate_type, SV_LIT("null"))) {
+    received = alternate_type;
+    expected = consequent_type;
+    expected.nullable = true;
+  } else {
+    expected = consequent_type;
+    received = alternate_type;
   }
 
-  return consequent_type;
+  if (type_is_equal(expected, received) && alternate_type.nullable) {
+    expected.nullable = true;
+  }    
+
+  if (!type_is_assignable(expected, received)) {
+    ErrorContext ctx = {.source = tc->source, .span = expr->span};
+    error_throw_fmt(&ctx,
+                    "The 'consequent' and 'alternate' values of a 'when "
+                    "expression' must be of same "
+                    "type, but received a 'consequent' of type '%s' and an 'alternate' of type '%s'.",
+                    type_to_string(consequent_type).buffer,
+                    type_to_string(alternate_type).buffer);
+  }
+
+  return expected;
 }
 
 Type tc_check_call_expr(TypeChecker *tc, Expr *expr) {
@@ -547,19 +585,19 @@ Type tc_check_call_expr(TypeChecker *tc, Expr *expr) {
     Expr *argument_expr = array_list_at(call->arguments, i);
     Type argument_type = tc_check_expr(tc, argument_expr);
 
-    if (!type_is_equal(param_symb->type, argument_type)) {
+    if (!type_is_assignable(param_symb->type, argument_type)) {
       ErrorContext ctx = {
           .source = tc->source,
           .span = argument_expr->span,
       };
       error_throw_fmt(&ctx,
                       "function '" SV_FMT "' param '" SV_FMT
-                      "' expects argument of type '" SV_FMT
-                      "', but has called with argument of type '" SV_FMT "'.",
+                      "' expects argument of type '%s', but has called with "
+                      "argument of type '%s'.",
                       SV_ARG(call->identifier_token.lexeme),
                       SV_ARG(param_decl->identifier_token.lexeme),
-                      SV_ARG(param_symb->type.identifier),
-                      SV_ARG(argument_type.identifier));
+                      type_to_string(param_symb->type).buffer,
+                      type_to_string(argument_type).buffer);
     }
   }
 
@@ -641,9 +679,29 @@ b8 type_is(Type type, StringView identifier) {
   return string_view_is_equal(type.identifier, identifier);
 }
 
+b8 type_is_assignable(Type expected, Type received) {
+  b8 is_equal = type_is_equal(expected, received);
+  b8 received_null = string_view_is_equal(received.identifier, SV_LIT("null"));
+
+  if (expected.nullable && (is_equal || received_null))
+    return true;
+  else
+    return is_equal && !received.nullable;
+}
+
 b8 type_is_equal(Type a, Type b) {
   return string_view_is_equal(a.identifier, b.identifier);
 }
 
 b8 type_is_numeric(Type type) { return type_is(type, SV_LIT("int")); }
 b8 type_is_empty(Type type) { return type_is(type, SV_LIT("void")); }
+
+StringBuilder type_to_string(Type type) {
+  StringBuilder sb = string_builder_new(type.identifier.length + 1);
+  string_builder_append(&sb, type.identifier);
+  if (type.nullable) {
+    string_builder_append_char(&sb, '?');
+  }
+
+  return sb;
+}
