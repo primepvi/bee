@@ -11,6 +11,7 @@ const char *const TOKEN_NAMES[TOKEN_KIND_KEY_COUNT] = {
     [TOKEN_KIND_OR] = "Or",
     [TOKEN_KIND_NOT] = "Not",
     [TOKEN_KIND_FALSE] = "False",
+    [TOKEN_KIND_NULL] = "Null",
     [TOKEN_KIND_THEN] = "Then",
     [TOKEN_KIND_END] = "End",
     [TOKEN_KIND_IF] = "If",
@@ -297,7 +298,7 @@ static void ast_print_stmt(const Stmt *stmt, u32 depth) {
     
     print_indent(depth + 1);
     printf("Value\n");
-    ast_print_expr(&ret->expr, depth + 2);
+    ast_print_expr(ret->expr, depth + 2);
     break;
   }    
   }

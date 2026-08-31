@@ -91,6 +91,9 @@ Result interpreter_eval_echo_stmt(Interpreter *interpreter, EchoStmt *stmt) {
   case VALUE_KIND_BOOLEAN:
     printf("%s\n", value.as.boolean ? "true" : "false");
     break;
+  case VALUE_KIND_NULL:
+    printf("null\n");
+    break;
   default:
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_echo_stmt).\n");
     exit(1);
@@ -181,7 +184,13 @@ Result interpreter_eval_for_stmt(Interpreter *interpreter, ForStmt *stmt) {
 
 Result interpreter_eval_return_stmt(Interpreter *interpreter,
                                     ReturnStmt *stmt) {
-  Value value = interpreter_eval_expr(interpreter, &stmt->expr);
+  Value value = {0};
+  if (stmt->expr == NULL) {
+    value.kind = VALUE_KIND_NULL;
+  } else {
+    value = interpreter_eval_expr(interpreter, stmt->expr);
+  }
+  
   return RESULT_RETURN(value);
 }
 
@@ -236,6 +245,10 @@ Value interpreter_eval_literal_expr(Interpreter *interpreter,
         string_view_is_equal(expr->value_token.lexeme, SV_LIT("true"));
     break;
   }
+  case TOKEN_KIND_NULL: {
+    value.kind = VALUE_KIND_NULL;
+    break;
+  }    
   default: {
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_literal_expr).\n");
     exit(1);
@@ -325,6 +338,8 @@ Value interpreter_eval_binary_expr(Interpreter *interpreter, BinaryExpr *expr) {
     } else if (left.kind == VALUE_KIND_STRING &&
                right.kind == VALUE_KIND_STRING) {
       value.as.boolean = string_view_is_equal(left.as.string, right.as.string);
+    } else if (left.kind == VALUE_KIND_NULL && right.kind == VALUE_KIND_NULL) {
+      value.as.boolean = true;      
     } else {
       value.as.boolean = false;
     }
@@ -340,6 +355,8 @@ Value interpreter_eval_binary_expr(Interpreter *interpreter, BinaryExpr *expr) {
     } else if (left.kind == VALUE_KIND_STRING &&
                right.kind == VALUE_KIND_STRING) {
       value.as.boolean = !string_view_is_equal(left.as.string, right.as.string);
+    } else if (left.kind == VALUE_KIND_NULL && right.kind == VALUE_KIND_NULL) {
+      value.as.boolean = false;
     } else {
       value.as.boolean = true;
     }
@@ -457,7 +474,14 @@ Value interpreter_eval_call_expr(Interpreter *interpreter, CallExpr *expr) {
   interpreter->symbols = scope.parent;
   symtable_destroy(&scope);
 
-  return result.value;
+  Value value = {0};
+  if (result.kind == RESULT_KIND_RETURN) {
+    value = result.value;
+  } else {
+    value.kind = VALUE_KIND_NULL;
+  }    
+
+  return value;
 }
 
 Value interpreter_eval_expr(Interpreter *interpreter, Expr *expr) {

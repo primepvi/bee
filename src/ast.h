@@ -19,6 +19,7 @@ typedef enum {
   TOKEN_KIND_ECHO,
   TOKEN_KIND_TRUE,
   TOKEN_KIND_FALSE,
+  TOKEN_KIND_NULL,
   TOKEN_KIND_AND,
   TOKEN_KIND_OR,
   TOKEN_KIND_NOT,
@@ -72,6 +73,7 @@ typedef enum {
   VALUE_KIND_INTEGER,
   VALUE_KIND_BOOLEAN,
   VALUE_KIND_STRING,
+  VALUE_KIND_NULL,
   VALUE_KIND_FUNCTION,
 } ValueKind;
 
@@ -203,7 +205,7 @@ typedef struct {
 
 typedef struct {
   Token keyword_token;
-  Expr expr;
+  Expr *expr;
 } ReturnStmt;
 
 typedef struct {

@@ -150,12 +150,31 @@ CallExpr parser_parse_call_expr(Parser *parser, Token identifier_token) {
   return (CallExpr) {
     .identifier_token = identifier_token, .open_paren_token = open_paren_token,
     .close_paren_token = close_paren_token, .arguments = arguments
-  };    
-}  
+  };
+}
+
+
+b8 parser_can_start_expr(Parser *parser) {
+  switch (parser->current_token.kind) {
+  case TOKEN_KIND_NULL:
+  case TOKEN_KIND_TRUE:
+  case TOKEN_KIND_FALSE:
+  case TOKEN_KIND_NUMBER:
+  case TOKEN_KIND_STRING:
+  case TOKEN_KIND_OPEN_PAREN:
+  case TOKEN_KIND_IDENTIFIER:
+  case TOKEN_KIND_WHEN:
+    return true;
+
+  default:
+    return false;
+  }
+}
 
 Expr parser_parse_primary_expr(Parser *parser) {
   Expr expr = {0};
   switch (parser->current_token.kind) {
+  case TOKEN_KIND_NULL:
   case TOKEN_KIND_TRUE:
   case TOKEN_KIND_FALSE:
   case TOKEN_KIND_NUMBER:
@@ -718,7 +737,12 @@ ForStmt parser_parse_for_stmt(Parser *parser) {
 
 ReturnStmt parser_parse_return_stmt(Parser *parser) {
   Token keyword_token = parser_eat_token(parser);
-  Expr expr = parser_parse_expr(parser);
+  Expr *expr = NULL;
+  if (parser_can_start_expr(parser)) {
+    expr = malloc(sizeof(Expr));
+    Expr return_expr = parser_parse_expr(parser);
+    memcpy(expr, &return_expr, sizeof(Expr));
+  }    
   
   return (ReturnStmt) {
     .keyword_token = keyword_token,
@@ -800,7 +824,7 @@ Stmt parser_parse_stmt(Parser *parser) {
     ReturnStmt return_stmt = parser_parse_return_stmt(parser);
     Span span = {.line = return_stmt.keyword_token.span.line,
                  .start = return_stmt.keyword_token.span.start,
-                 .end = return_stmt.expr.span.end};
+                 .end = return_stmt.expr == NULL ? return_stmt.keyword_token.span.end : return_stmt.expr->span.end};
     stmt.kind = STMT_KIND_RETURN;
     stmt.as.return_stmt = return_stmt;
     stmt.span = span;

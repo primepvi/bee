@@ -38,5 +38,6 @@ b8 type_supports_logical_op(Type left, Type right, TokenKind operator_kind);
 b8 type_is(Type type, StringView identifier);
 b8 type_is_equal(Type a, Type b);
 b8 type_is_numeric(Type type);
+b8 type_is_empty(Type type);
 
 #endif // BEE_TYPECHECKER_H
