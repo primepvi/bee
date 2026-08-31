@@ -32,6 +32,7 @@ typedef enum {
   TOKEN_KIND_WHEN,
   TOKEN_KIND_OTHERWISE,
   TOKEN_KIND_FN,
+  TOKEN_KIND_RETURN,
   TOKEN_KIND_IDENTIFIER,
 
   TOKEN_KIND_NUMBER,
@@ -70,8 +71,13 @@ typedef struct {
 typedef enum {
   VALUE_KIND_INTEGER,
   VALUE_KIND_BOOLEAN,
-  VALUE_KIND_STRING
+  VALUE_KIND_STRING,
+  VALUE_KIND_FUNCTION,
 } ValueKind;
+
+typedef struct {
+  StringView identifier;
+} Function;
 
 typedef struct {
   ValueKind kind;
@@ -79,6 +85,7 @@ typedef struct {
     i64 integer;
     b8 boolean;
     StringView string;
+    Function function;
   } as;
 } Value;
 
@@ -93,6 +100,7 @@ typedef enum {
   EXPR_KIND_UNARY,
   EXPR_KIND_PARENTHESIZED,
   EXPR_KIND_WHEN,
+  EXPR_KIND_CALL,
 } ExprKind;
 
 typedef struct {
@@ -132,11 +140,17 @@ typedef struct {
 
 typedef struct {
   Token when_token;
-  Token otherwise_token;  
+  Token otherwise_token;
   Expr *condition;
   Expr *consequent;
   Expr *alternate;
-} WhenExpr;  
+} WhenExpr;
+
+typedef struct {
+  Token identifier_token;
+  Token open_paren_token, close_paren_token;  
+  ArrayList *arguments;
+} CallExpr;  
 
 typedef struct Expr {
   ExprKind kind;
@@ -150,11 +164,14 @@ typedef struct Expr {
     UnaryExpr unary;
     ParenthesizedExpr parenthesized;
     WhenExpr when;
+    CallExpr call;
   } as;
 } Expr;
 
 typedef enum {
   STMT_KIND_VARIABLE_DECL,
+  STMT_KIND_FUNCTION_DECL,
+  STMT_KIND_RETURN,
   STMT_KIND_EXPR,
   STMT_KIND_ECHO,
   STMT_KIND_IF,
@@ -170,6 +187,24 @@ typedef struct {
   Token *type_identifier_token;
   Expr value;
 } VariableDeclStmt;
+
+typedef struct {
+  Token keyword_token;
+  Token identifier_token;
+  Token return_type_identifier_token;
+  ArrayList *params;
+  Stmt *body;
+} FunctionDeclStmt;
+
+typedef struct {
+  Token identifier_token;
+  Token type_identifier_token;
+} FunctionDeclParam;
+
+typedef struct {
+  Token keyword_token;
+  Expr expr;
+} ReturnStmt;
 
 typedef struct {
   Expr expr;
@@ -203,15 +238,17 @@ typedef struct {
   Expr *test;
   Expr *update;
   Stmt *body;
-} ForStmt;  
+} ForStmt;
 
 typedef struct Stmt {
   StmtKind kind;
   union {
     VariableDeclStmt variable_decl;
+    FunctionDeclStmt function_decl;
+    ReturnStmt return_stmt;
     ExprStmt expr;
     EchoStmt echo;
-    BlockStmt block;    
+    BlockStmt block;
     IfStmt if_stmt;
     WhileStmt while_stmt;
     ForStmt for_stmt;

@@ -1,14 +1,13 @@
-fn double(x: int): int -> x * 2
-
-fn divide(x: int, y: int): int
-   if y == 0 then
-      return -1
-   end
-
-   return x / y
+fn hello(): void
+   echo "Hello, World"
 end
 
-fn main(): void
-   echo double(10)
-   echo divide(10, 2)
+fn factorial(n: int): int
+   if n < 0 -> return 0
+   if n == 0 or n == 1 -> return 1
+
+   return n * factorial(n - 1)
 end
+
+hello()
+echo factorial(5)

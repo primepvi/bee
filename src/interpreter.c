@@ -28,25 +28,58 @@ void interpreter_eval(Interpreter *interpreter) {
   }
 }
 
-void interpreter_eval_expr_stmt(Interpreter *interpreter, ExprStmt *stmt) {
+Result interpreter_eval_expr_stmt(Interpreter *interpreter, ExprStmt *stmt) {
   interpreter_eval_expr(interpreter, &stmt->expr);
+  return RESULT_NORMAL();
 }
 
-void interpreter_eval_variable_decl_stmt(Interpreter *interpreter,
-                                         VariableDeclStmt *stmt) {
+Result interpreter_eval_variable_decl_stmt(Interpreter *interpreter,
+                                           VariableDeclStmt *stmt) {
   Value value = interpreter_eval_expr(interpreter, &stmt->value);
-  Symbol symbol = {
+  SymbolVariable variable = {
       .value_expr = &stmt->value,
       .value = malloc(sizeof(Value)),
       .constant =
           string_view_is_equal(stmt->keyword_token.lexeme, SV_LIT("const")),
-      .identifier = stmt->identifier_token.lexeme,
   };
-  memcpy(symbol.value, &value, sizeof(Value));
+  memcpy(variable.value, &value, sizeof(Value));
+
+  Symbol symbol = {0};
+  symbol.kind = SYMBOL_KIND_VARIABLE;
+  symbol.identifier = stmt->identifier_token.lexeme;
+  symbol.as.variable = variable;
   symtable_put(interpreter->symbols, symbol);
+
+  return RESULT_NORMAL();
 }
 
-void interpreter_eval_echo_stmt(Interpreter *interpreter, EchoStmt *stmt) {
+Result interpreter_eval_function_decl_stmt(Interpreter *interpreter,
+                                           FunctionDeclStmt *stmt) {
+
+  Function function = {0};
+  function.identifier = stmt->identifier_token.lexeme;
+
+  Value value = {0};
+  value.kind = VALUE_KIND_FUNCTION;
+  value.as.function = function;
+
+  SymbolFunction sym_function = {0};
+  sym_function.params_variables = NULL;
+  sym_function.stmt = stmt;
+  sym_function.value = malloc(sizeof(Value));
+  memcpy(sym_function.value, &value, sizeof(Value));
+
+  Symbol symbol = {0};
+  symbol.kind = SYMBOL_KIND_FUNCTION;
+  symbol.as.func = sym_function;
+  symbol.identifier = stmt->identifier_token.lexeme;
+
+  symtable_put(interpreter->symbols, symbol);
+
+  return RESULT_NORMAL();
+}
+
+Result interpreter_eval_echo_stmt(Interpreter *interpreter, EchoStmt *stmt) {
   Value value = interpreter_eval_expr(interpreter, &stmt->message);
   switch (value.kind) {
   case VALUE_KIND_INTEGER:
@@ -62,83 +95,118 @@ void interpreter_eval_echo_stmt(Interpreter *interpreter, EchoStmt *stmt) {
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_echo_stmt).\n");
     exit(1);
   }
+
+  return RESULT_NORMAL();
 }
 
-void interpreter_eval_block_stmt(Interpreter *interpreter, BlockStmt *stmt) {
-  SymbolTable scope = symtable_new(interpreter->symbols);
+Result interpreter_eval_block_stmt(Interpreter *interpreter, BlockStmt *stmt) {
+  SymbolTable scope =
+      symtable_new(interpreter->symbols, SYMBOL_TABLE_KIND_BLOCK);
   interpreter->symbols = &scope;
-  
+
   for (u32 i = 0; i < array_list_length(stmt->stmts); i++) {
     Stmt *cur = array_list_at(stmt->stmts, i);
-    interpreter_eval_stmt(interpreter, cur);
+    Result result = interpreter_eval_stmt(interpreter, cur);
+    if (result.kind == RESULT_KIND_RETURN) {
+      interpreter->symbols = scope.parent;
+      symtable_destroy(&scope);
+      return result;
+    }
   }
 
   interpreter->symbols = scope.parent;
   symtable_destroy(&scope);
+
+  return RESULT_NORMAL();
 }
 
-void interpreter_eval_if_stmt(Interpreter *interpreter, IfStmt *stmt) {
+Result interpreter_eval_if_stmt(Interpreter *interpreter, IfStmt *stmt) {
   Value condition = interpreter_eval_expr(interpreter, stmt->condition);
+  Result result = RESULT_NORMAL();
   if (condition.as.boolean) {
-    interpreter_eval_stmt(interpreter, stmt->consequent);
+    result = interpreter_eval_stmt(interpreter, stmt->consequent);
   } else if (stmt->alternate != NULL) {
-    interpreter_eval_stmt(interpreter, stmt->alternate);
+    result = interpreter_eval_stmt(interpreter, stmt->alternate);
   }
+
+  return result;
 }
 
-void interpreter_eval_while_stmt(Interpreter *interpreter, WhileStmt *stmt) {
-  SymbolTable scope = symtable_new(interpreter->symbols);
+Result interpreter_eval_while_stmt(Interpreter *interpreter, WhileStmt *stmt) {
+  SymbolTable scope =
+      symtable_new(interpreter->symbols, SYMBOL_TABLE_KIND_BLOCK);
   interpreter->symbols = &scope;
 
-  Value condition = interpreter_eval_expr(interpreter, stmt->condition);  
+  Value condition = interpreter_eval_expr(interpreter, stmt->condition);
   while (condition.as.boolean) {
-    interpreter_eval_stmt(interpreter, stmt->body);
+    Result result = interpreter_eval_stmt(interpreter, stmt->body);
+    if (result.kind == RESULT_KIND_RETURN) {
+      interpreter->symbols = scope.parent;
+      symtable_destroy(&scope);
+      return result;
+    }
+
     condition = interpreter_eval_expr(interpreter, stmt->condition);
   }
 
   interpreter->symbols = scope.parent;
   symtable_destroy(&scope);
+  return RESULT_NORMAL();
 }
 
-void interpreter_eval_for_stmt(Interpreter *interpreter, ForStmt *stmt) {
-  SymbolTable scope = symtable_new(interpreter->symbols);
+Result interpreter_eval_for_stmt(Interpreter *interpreter, ForStmt *stmt) {
+  SymbolTable scope =
+      symtable_new(interpreter->symbols, SYMBOL_TABLE_KIND_BLOCK);
   interpreter->symbols = &scope;
   interpreter_eval_stmt(interpreter, stmt->init);
-  
-  Value test = interpreter_eval_expr(interpreter, stmt->test);  
+
+  Value test = interpreter_eval_expr(interpreter, stmt->test);
   while (test.as.boolean) {
-    interpreter_eval_stmt(interpreter, stmt->body);
+    Result result = interpreter_eval_stmt(interpreter, stmt->body);
+    if (result.kind == RESULT_KIND_RETURN) {
+      interpreter->symbols = scope.parent;
+      symtable_destroy(&scope);
+      return result;
+    }
+
     interpreter_eval_expr(interpreter, stmt->update);
     test = interpreter_eval_expr(interpreter, stmt->test);
   }
 
   interpreter->symbols = scope.parent;
   symtable_destroy(&scope);
-}  
 
-void interpreter_eval_stmt(Interpreter *interpreter, Stmt *stmt) {
+  return RESULT_NORMAL();
+}
+
+Result interpreter_eval_return_stmt(Interpreter *interpreter,
+                                    ReturnStmt *stmt) {
+  Value value = interpreter_eval_expr(interpreter, &stmt->expr);
+  return RESULT_RETURN(value);
+}
+
+Result interpreter_eval_stmt(Interpreter *interpreter, Stmt *stmt) {
   switch (stmt->kind) {
   case STMT_KIND_EXPR:
-    interpreter_eval_expr_stmt(interpreter, &stmt->as.expr);
-    break;
+    return interpreter_eval_expr_stmt(interpreter, &stmt->as.expr);
   case STMT_KIND_VARIABLE_DECL:
-    interpreter_eval_variable_decl_stmt(interpreter, &stmt->as.variable_decl);
-    break;
+    return interpreter_eval_variable_decl_stmt(interpreter,
+                                               &stmt->as.variable_decl);
+  case STMT_KIND_FUNCTION_DECL:
+    return interpreter_eval_function_decl_stmt(interpreter,
+                                               &stmt->as.function_decl);
   case STMT_KIND_ECHO:
-    interpreter_eval_echo_stmt(interpreter, &stmt->as.echo);
-    break;
+    return interpreter_eval_echo_stmt(interpreter, &stmt->as.echo);
   case STMT_KIND_BLOCK:
-    interpreter_eval_block_stmt(interpreter, &stmt->as.block);
-    break;
+    return interpreter_eval_block_stmt(interpreter, &stmt->as.block);
   case STMT_KIND_IF:
-    interpreter_eval_if_stmt(interpreter, &stmt->as.if_stmt);
-    break;
+    return interpreter_eval_if_stmt(interpreter, &stmt->as.if_stmt);
   case STMT_KIND_WHILE:
-    interpreter_eval_while_stmt(interpreter, &stmt->as.while_stmt);
-    break;
+    return interpreter_eval_while_stmt(interpreter, &stmt->as.while_stmt);
   case STMT_KIND_FOR:
-    interpreter_eval_for_stmt(interpreter, &stmt->as.for_stmt);
-    break;
+    return interpreter_eval_for_stmt(interpreter, &stmt->as.for_stmt);
+  case STMT_KIND_RETURN:
+    return interpreter_eval_return_stmt(interpreter, &stmt->as.return_stmt);
   default:
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_stmt).\n");
     exit(1);
@@ -182,8 +250,9 @@ Value interpreter_eval_assignment_expr(Interpreter *interpreter,
   Value value = interpreter_eval_expr(interpreter, expr->value);
   Symbol *symbol =
       symtable_get(interpreter->symbols, expr->identifier_token.lexeme);
-  symbol->value = malloc(sizeof(Symbol));
-  memcpy(symbol->value, &value, sizeof(Value));
+  SymbolVariable *variable = &symbol->as.variable;
+  variable->value = malloc(sizeof(Symbol));
+  memcpy(variable->value, &value, sizeof(Value));
 
   return value;
 }
@@ -192,7 +261,8 @@ Value interpreter_eval_identifier_expr(Interpreter *interpreter,
                                        IdentifierExpr *expr) {
   Symbol *symbol =
       symtable_get(interpreter->symbols, expr->identifier_token.lexeme);
-  return *symbol->value;
+  return symbol->kind == SYMBOL_KIND_FUNCTION ? *symbol->as.func.value
+                                              : *symbol->as.variable.value;
 }
 
 Value interpreter_eval_binary_expr(Interpreter *interpreter, BinaryExpr *expr) {
@@ -273,7 +343,7 @@ Value interpreter_eval_binary_expr(Interpreter *interpreter, BinaryExpr *expr) {
     } else {
       value.as.boolean = true;
     }
-    
+
     break;
   default:
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_binary_expr).\n");
@@ -287,7 +357,7 @@ Value interpreter_eval_logical_expr(Interpreter *interpreter,
                                     LogicalExpr *expr) {
   Value value = {0};
   value.kind = VALUE_KIND_BOOLEAN;
-  
+
   switch (expr->operator_token.kind) {
   case TOKEN_KIND_AND: {
     Value left = interpreter_eval_expr(interpreter, expr->left);
@@ -298,7 +368,7 @@ Value interpreter_eval_logical_expr(Interpreter *interpreter,
 
     Value right = interpreter_eval_expr(interpreter, expr->right);
     value.as.boolean = left.as.boolean && right.as.boolean;
-    
+
     return value;
   }
   case TOKEN_KIND_OR: {
@@ -311,7 +381,7 @@ Value interpreter_eval_logical_expr(Interpreter *interpreter,
     Value right = interpreter_eval_expr(interpreter, expr->right);
     value.as.boolean = left.as.boolean || right.as.boolean;
     return value;
-  }    
+  }
   default:
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_logical_expr).\n");
     exit(1);
@@ -345,7 +415,50 @@ Value interpreter_eval_when_expr(Interpreter *interpreter, WhenExpr *when) {
   } else {
     return interpreter_eval_expr(interpreter, when->alternate);
   }
-}  
+}
+
+Value interpreter_eval_call_expr(Interpreter *interpreter, CallExpr *expr) {
+  Symbol *symbol =
+      symtable_get(interpreter->symbols, expr->identifier_token.lexeme);
+  SymbolFunction *function = &symbol->as.func;
+  FunctionDeclStmt *function_decl = function->stmt;
+
+  SymbolTable scope =
+      symtable_new(interpreter->symbols, SYMBOL_TABLE_KIND_FUNCTION);
+  for (u32 i = 0; i < array_list_length(function_decl->params); i++) {
+    FunctionDeclParam *param = array_list_at(function_decl->params, i);
+    Expr *argument_expr = array_list_at(expr->arguments, i);
+    Value argument_value = interpreter_eval_expr(interpreter, argument_expr);
+
+    Symbol symbol = {0};
+    if (argument_value.kind != VALUE_KIND_FUNCTION) {
+      SymbolVariable variable = {0};
+      variable.value = malloc(sizeof(Value));
+      memcpy(variable.value, &argument_value, sizeof(Value));      
+      
+      symbol.kind = SYMBOL_KIND_VARIABLE;
+      symbol.identifier = param->identifier_token.lexeme;
+      symbol.as.variable = variable;
+    } else {
+      SymbolFunction function = {0};
+      function.value = malloc(sizeof(Value));
+      memcpy(function.value, &argument_value, sizeof(Value));
+
+      symbol.kind = SYMBOL_KIND_FUNCTION;
+      symbol.identifier = param->identifier_token.lexeme;
+      symbol.as.func = function;
+    }    
+    
+    symtable_put(&scope, symbol);
+  }
+
+  interpreter->symbols = &scope;  
+  Result result = interpreter_eval_stmt(interpreter, function_decl->body);
+  interpreter->symbols = scope.parent;
+  symtable_destroy(&scope);
+
+  return result.value;
+}
 
 Value interpreter_eval_expr(Interpreter *interpreter, Expr *expr) {
   switch (expr->kind) {
@@ -365,6 +478,8 @@ Value interpreter_eval_expr(Interpreter *interpreter, Expr *expr) {
     return interpreter_eval_unary_expr(interpreter, &expr->as.unary);
   case EXPR_KIND_WHEN:
     return interpreter_eval_when_expr(interpreter, &expr->as.when);
+  case EXPR_KIND_CALL:
+    return interpreter_eval_call_expr(interpreter, &expr->as.call);
   default:
     fprintf(stderr, "ERROR: unreachable (interpreter_eval_expr).\n");
     exit(1);

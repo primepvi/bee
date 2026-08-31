@@ -21,6 +21,7 @@ const char *const TOKEN_NAMES[TOKEN_KIND_KEY_COUNT] = {
     [TOKEN_KIND_WHEN] = "When",
     [TOKEN_KIND_OTHERWISE] = "Otherwise",
     [TOKEN_KIND_FN] = "Fn",
+    [TOKEN_KIND_RETURN] = "Return",
     [TOKEN_KIND_IDENTIFIER] = "Identifier",
     [TOKEN_KIND_NUMBER] = "Number",
     [TOKEN_KIND_STRING] = "String",
@@ -112,7 +113,7 @@ static void ast_print_expr(const Expr *expr, u32 depth) {
     printf("Right\n");
     ast_print_expr(logical->right, depth + 2);
     break;
-  }    
+  }   
   case EXPR_KIND_PARENTHESIZED: {
     const ParenthesizedExpr *parenthesized = &expr->as.parenthesized;
     printf("Parenthesized\n");
@@ -176,6 +177,32 @@ static void ast_print_stmt(const Stmt *stmt, u32 depth) {
     ast_print_expr(&decl->value, depth + 2);
     break;
   }
+  case STMT_KIND_FUNCTION_DECL: {
+    const FunctionDeclStmt *decl = &stmt->as.function_decl;
+    printf("FunctionDeclaration (" SV_FMT ")\n",
+           SV_ARG(decl->identifier_token.lexeme));
+
+    print_indent(depth + 1);
+    printf("Params\n");
+    for (u32 i = 0; i < array_list_length(decl->params); i++) {
+      FunctionDeclParam *param = array_list_at(decl->params, i);
+      print_indent(depth + 2);
+      printf("Param\n");
+
+      print_indent(depth + 3);
+      printf("Identifier: '" SV_FMT "', Type: '" SV_FMT "'\n",
+             SV_ARG(param->identifier_token.lexeme),
+             SV_ARG(param->type_identifier_token.lexeme));      
+    }
+
+    print_indent(depth + 1);
+    printf("Return: " SV_FMT "\n", SV_ARG(decl->return_type_identifier_token.lexeme));
+
+    print_indent(depth + 1);
+    printf("Body\n");
+    ast_print_stmt(decl->body, depth + 2);
+    break;
+  }    
   case STMT_KIND_EXPR: {
     const ExprStmt *expr = &stmt->as.expr;
     printf("ExprStmt\n");

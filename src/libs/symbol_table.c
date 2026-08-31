@@ -1,8 +1,9 @@
 #include "symbol_table.h"
 #include "hashmap.h"
 
-SymbolTable symtable_new(SymbolTable *parent) {
+SymbolTable symtable_new(SymbolTable *parent, SymbolTableKind kind) {
   SymbolTable table = {0};
+  table.kind = kind;
   table.env = hashmap_new(32);
   table.parent = parent;
   return table;

@@ -22,7 +22,7 @@ int main(int argc, char **argv) {
     ast_print(&program);
   }    
 
-  SymbolTable symbols = symtable_new(NULL);
+  SymbolTable symbols = symtable_new(NULL, SYMBOL_TABLE_KIND_GLOBAL);
   TypeChecker tc = tc_create(&program, &source, &symbols);
   tc_check(&tc);
 

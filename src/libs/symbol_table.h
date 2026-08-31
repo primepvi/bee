@@ -10,20 +10,47 @@ typedef struct {
   StringView identifier;
 } Type;
 
+typedef enum {
+  SYMBOL_KIND_VARIABLE,
+  SYMBOL_KIND_FUNCTION,
+} SymbolKind;
+
 typedef struct {
-  StringView identifier;
   Type type;
   b8 constant;
   Expr *value_expr;
   Value *value;
+} SymbolVariable;
+
+typedef struct {
+  Type return_type;
+  ArrayList *params_variables;
+  FunctionDeclStmt *stmt;
+  Value *value;
+} SymbolFunction; 
+
+typedef struct {
+  SymbolKind kind;
+  StringView identifier;
+  union {
+    SymbolVariable variable;
+    SymbolFunction func;
+  } as;
 } Symbol;
 
+typedef enum {
+  SYMBOL_TABLE_KIND_GLOBAL,
+  SYMBOL_TABLE_KIND_FUNCTION,
+  SYMBOL_TABLE_KIND_BLOCK,
+} SymbolTableKind;
+
 typedef struct SymbolTable {
+  SymbolTableKind kind;
   HashMap *env;
   struct SymbolTable *parent;
 } SymbolTable;
 
-SymbolTable symtable_new(SymbolTable *parent);
+SymbolTable symtable_new(SymbolTable *parent, SymbolTableKind kind);
 void symtable_destroy(SymbolTable *table);
 
 void symtable_put(SymbolTable *table, Symbol symbol);

@@ -12,14 +12,23 @@ typedef struct {
   Source *source;
   SymbolTable *symbols;
   HashMap *type_env;
+  Type expected_return_type;
 } TypeChecker;
+
+typedef struct {
+  b8 can_continue;
+} Flow;
+
+#define FLOW_CONTINUE ((Flow){(true)})
+#define FLOW_STOP ((Flow){false})
+#define FLOW(can_continue) ((Flow){(can_continue)})
 
 TypeChecker tc_create(Program *program, Source *source, SymbolTable *symbols);
 void tc_define_type(TypeChecker *tc, Type type);
 Type tc_get_type(TypeChecker *tc, StringView identifier);
 
 void tc_check(TypeChecker *tc);
-void tc_check_stmt(TypeChecker *tc, Stmt *stmt);
+Flow tc_check_stmt(TypeChecker *tc, Stmt *stmt);
 Type tc_check_expr(TypeChecker *tc, Expr *expr);
 
 b8 type_supports_unary_op(Type type, TokenKind operator_kind);

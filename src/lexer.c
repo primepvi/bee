@@ -98,6 +98,8 @@ Token lexer_next_token(Lexer *l) {
       kind = TOKEN_KIND_OTHERWISE;
     } else if (string_view_is_equal(name, SV_LIT("fn"))) {
       kind = TOKEN_KIND_FN;
+    } else if (string_view_is_equal(name, SV_LIT("return"))) {
+      kind = TOKEN_KIND_RETURN;
     }
 
     l->cursor += name.length;

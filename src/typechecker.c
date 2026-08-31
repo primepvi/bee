@@ -13,6 +13,7 @@ TypeChecker tc_create(Program *program, Source *source, SymbolTable *symbols) {
   tc.program = program;
   tc.source = source;
   tc.symbols = symbols;
+  tc.expected_return_type = (Type){.identifier = SV_LIT("invalid")};
 
   // builtin types
   tc_define_type(&tc, (Type){.identifier = SV_LIT("int")});
@@ -20,6 +21,7 @@ TypeChecker tc_create(Program *program, Source *source, SymbolTable *symbols) {
   tc_define_type(&tc, (Type){.identifier = SV_LIT("string")});
   tc_define_type(&tc, (Type){.identifier = SV_LIT("void")});
   tc_define_type(&tc, (Type){.identifier = SV_LIT("invalid")});
+  tc_define_type(&tc, (Type){.identifier = SV_LIT("function")});
 
   return tc;
 }
@@ -41,7 +43,7 @@ void tc_check(TypeChecker *tc) {
   }
 }
 
-void tc_check_variable_decl_stmt(TypeChecker *tc, Stmt *stmt) {
+Flow tc_check_variable_decl_stmt(TypeChecker *tc, Stmt *stmt) {
   VariableDeclStmt *decl = &stmt->as.variable_decl;
   if (symtable_scope_has(tc->symbols, decl->identifier_token.lexeme)) {
     ErrorContext ctx = {.source = tc->source,
@@ -64,38 +66,138 @@ void tc_check_variable_decl_stmt(TypeChecker *tc, Stmt *stmt) {
       error_throw_fmt(&ctx,
                       "variable expects value of type '" SV_FMT
                       "', but received value of type '" SV_FMT "'.",
-		      SV_ARG(anotation_type.identifier), SV_ARG(value_type.identifier));
+                      SV_ARG(anotation_type.identifier),
+                      SV_ARG(value_type.identifier));
     }
   }
 
-  Symbol symbol = {0};
-  symbol.constant =
+  SymbolVariable variable = {0};
+  variable.type = type;
+  variable.constant =
       string_view_is_equal(decl->keyword_token.lexeme, SV_LIT("const"));
-  symbol.value_expr = &decl->value;
-  symbol.value = NULL;
+  variable.value_expr = &decl->value;
+  variable.value = NULL;
+
+  Symbol symbol = {0};
+  symbol.kind = SYMBOL_KIND_VARIABLE;
   symbol.identifier = decl->identifier_token.lexeme;
-  symbol.type = type;
+  symbol.as.variable = variable;
 
   symtable_put(tc->symbols, symbol);
+  return FLOW_CONTINUE;
 }
 
-void tc_check_block_stmt(TypeChecker *tc, Stmt *stmt) {
-  BlockStmt *block = &stmt->as.block;
-  SymbolTable scope = symtable_new(tc->symbols);
+Flow tc_check_function_decl_stmt(TypeChecker *tc, Stmt *stmt) {
+  FunctionDeclStmt *decl = &stmt->as.function_decl;
+  if (symtable_has(tc->symbols, decl->identifier_token.lexeme)) {
+    ErrorContext ctx = {.source = tc->source,
+                        .span = decl->identifier_token.span};
+    error_throw_fmt(
+        &ctx,
+        "already has a declared variable or function with name '" SV_FMT "'.",
+        SV_ARG(decl->identifier_token.lexeme));
+  }
+
+  ArrayList *param_variables =
+      array_list_new(array_list_capacity(decl->params), sizeof(SymbolVariable));
+  SymbolTable scope = symtable_new(tc->symbols, SYMBOL_TABLE_KIND_FUNCTION);
+  for (u32 i = 0; i < array_list_length(decl->params); i++) {
+    FunctionDeclParam *param = array_list_at(decl->params, i);
+    Type param_type = tc_get_type(tc, param->type_identifier_token.lexeme);
+    if (type_is(param_type, SV_LIT("invalid"))) {
+      ErrorContext ctx = {.source = tc->source,
+                          .span = param->type_identifier_token.span};
+      error_throw(&ctx,
+                  "attempt to anotate a function param with non-defined type.");
+    }
+
+    SymbolVariable param_variable = {0};
+    param_variable.constant = true;
+    param_variable.type = param_type;
+    param_variable.value = NULL;
+    param_variable.value_expr = NULL;
+
+    Symbol param_symbol = {0};
+    param_symbol.kind = SYMBOL_KIND_VARIABLE;
+    param_symbol.as.variable = param_variable;
+    param_symbol.identifier = param->identifier_token.lexeme;
+
+    symtable_put(&scope, param_symbol);
+    array_list_push(param_variables, &param_variable);
+  }
+
+  Type return_type = tc_get_type(tc, decl->return_type_identifier_token.lexeme);
+  if (type_is(return_type, SV_LIT("invalid"))) {
+    ErrorContext ctx = {.source = tc->source,
+                        .span = decl->return_type_identifier_token.span};
+    error_throw(&ctx,
+                "attempt to anotate a function with non-defined return type.");
+  }
+
+  SymbolFunction function = {0};
+  function.stmt = &stmt->as.function_decl;
+  function.params_variables = param_variables;
+  function.return_type = return_type;
+
+  Symbol symbol = {0};
+  symbol.kind = SYMBOL_KIND_FUNCTION;
+  symbol.identifier = decl->identifier_token.lexeme;
+  symbol.as.func = function;
+
+  if (tc->symbols->kind != SYMBOL_TABLE_KIND_GLOBAL) {
+    ErrorContext ctx = {.source = tc->source,
+                        .span = decl->identifier_token.span};
+    error_throw(&ctx, "attempt to define a function with non-global scope.");
+  }
+
+  symtable_put(tc->symbols, symbol);
+  symtable_put(&scope, symbol);
+
+  Type prev_return_type = tc->expected_return_type;
+  tc->expected_return_type = return_type;
   tc->symbols = &scope;
 
+  Flow flow = tc_check_stmt(tc, decl->body);
+
+  tc->symbols = scope.parent;
+  tc->expected_return_type = prev_return_type;
+
+  symtable_destroy(&scope);
+
+  if (!type_is(return_type, SV_LIT("void")) && flow.can_continue) {
+    ErrorContext ctx = {.source = tc->source, .span = stmt->span};
+    error_throw(&ctx, "not all function control paths return a value.");
+  }
+
+  return FLOW_CONTINUE;
+}
+
+Flow tc_check_block_stmt(TypeChecker *tc, Stmt *stmt) {
+  BlockStmt *block = &stmt->as.block;
+  SymbolTable scope = symtable_new(tc->symbols, SYMBOL_TABLE_KIND_BLOCK);
+  tc->symbols = &scope;
+
+  Flow flow = FLOW_CONTINUE;
   for (u32 i = 0; i < array_list_length(block->stmts); i++) {
+    if (!flow.can_continue) {
+      break;
+    }
+
     Stmt *stmt = array_list_at(block->stmts, i);
-    tc_check_stmt(tc, stmt);
+    flow = tc_check_stmt(tc, stmt);
   }
 
   tc->symbols = scope.parent;
   symtable_destroy(&scope);
+  return flow;
 }
 
-void tc_check_if_stmt(TypeChecker *tc, Stmt *stmt) {
+Flow tc_check_if_stmt(TypeChecker *tc, Stmt *stmt) {
   IfStmt *if_stmt = &stmt->as.if_stmt;
   Type condition_type = tc_check_expr(tc, if_stmt->condition);
+  Flow consequent_flow = FLOW_CONTINUE;
+  Flow alternate_flow = FLOW_CONTINUE;
+
   if (!type_is(condition_type, SV_LIT("bool"))) {
     ErrorContext ctx = {.source = tc->source, .span = if_stmt->condition->span};
     error_throw_fmt(&ctx,
@@ -104,17 +206,19 @@ void tc_check_if_stmt(TypeChecker *tc, Stmt *stmt) {
                     SV_ARG(condition_type.identifier));
   }
 
-  tc_check_stmt(tc, if_stmt->consequent);
+  consequent_flow = tc_check_stmt(tc, if_stmt->consequent);
   if (if_stmt->alternate != NULL) {
-    tc_check_stmt(tc, if_stmt->alternate);
+    alternate_flow = tc_check_stmt(tc, if_stmt->alternate);
   }
+
+  return FLOW(consequent_flow.can_continue || alternate_flow.can_continue);
 }
 
-void tc_check_while_stmt(TypeChecker *tc, Stmt *stmt) {
+Flow tc_check_while_stmt(TypeChecker *tc, Stmt *stmt) {
   WhileStmt *while_stmt = &stmt->as.while_stmt;
   Type condition_type = tc_check_expr(tc, while_stmt->condition);
 
-  SymbolTable scope = symtable_new(tc->symbols);
+  SymbolTable scope = symtable_new(tc->symbols, SYMBOL_TABLE_KIND_BLOCK);
   tc->symbols = &scope;
 
   if (!type_is(condition_type, SV_LIT("bool"))) {
@@ -126,14 +230,16 @@ void tc_check_while_stmt(TypeChecker *tc, Stmt *stmt) {
                     SV_ARG(condition_type.identifier));
   }
 
-  tc_check_stmt(tc, while_stmt->body);
+  Flow flow = tc_check_stmt(tc, while_stmt->body);
   tc->symbols = scope.parent;
   symtable_destroy(&scope);
+
+  return flow;
 }
 
-void tc_check_for_stmt(TypeChecker *tc, Stmt *stmt) {
+Flow tc_check_for_stmt(TypeChecker *tc, Stmt *stmt) {
   ForStmt *for_stmt = &stmt->as.for_stmt;
-  SymbolTable scope = symtable_new(tc->symbols);
+  SymbolTable scope = symtable_new(tc->symbols, SYMBOL_TABLE_KIND_BLOCK);
   tc->symbols = &scope;
   tc_check_stmt(tc, for_stmt->init);
 
@@ -148,43 +254,65 @@ void tc_check_for_stmt(TypeChecker *tc, Stmt *stmt) {
   }
 
   tc_check_expr(tc, for_stmt->update);
-  tc_check_stmt(tc, for_stmt->body);
+  Flow flow = tc_check_stmt(tc, for_stmt->body);
   tc->symbols = scope.parent;
   symtable_destroy(&scope);
+
+  return flow;
 }
 
-void tc_check_stmt(TypeChecker *tc, Stmt *stmt) {
+Flow tc_check_return_stmt(TypeChecker *tc, Stmt *stmt) {
+  ReturnStmt *ret = &stmt->as.return_stmt;
+  SymbolTable *function_scope = tc->symbols;
+  while (function_scope->parent != NULL &&
+         function_scope->kind != SYMBOL_TABLE_KIND_FUNCTION) {
+    function_scope = function_scope->parent;
+  }
+
+  if (function_scope->kind != SYMBOL_TABLE_KIND_FUNCTION) {
+    ErrorContext ctx = {.source = tc->source, .span = stmt->span};
+    error_throw(&ctx, "attempt to return outside a function block.");
+  }
+
+  Type ret_type = tc_check_expr(tc, &ret->expr);
+  if (!type_is_equal(ret_type, tc->expected_return_type)) {
+    ErrorContext ctx = {.source = tc->source, .span = ret->expr.span};
+    error_throw_fmt(&ctx,
+                    "function expects a return value of type '" SV_FMT
+                    "', but received a value of type '" SV_FMT "'.",
+                    SV_ARG(tc->expected_return_type.identifier),
+                    SV_ARG(ret_type.identifier));
+  }
+
+  return FLOW_STOP;
+}
+
+Flow tc_check_stmt(TypeChecker *tc, Stmt *stmt) {
   switch (stmt->kind) {
   case STMT_KIND_ECHO: {
     EchoStmt *echo = &stmt->as.echo;
     tc_check_expr(tc, &echo->message);
-    break;
+    return FLOW_CONTINUE;
   }
   case STMT_KIND_EXPR: {
     ExprStmt *expr = &stmt->as.expr;
     tc_check_expr(tc, &expr->expr);
-    break;
+    return FLOW_CONTINUE;
   }
-  case STMT_KIND_VARIABLE_DECL: {
-    tc_check_variable_decl_stmt(tc, stmt);
-    break;
-  }
-  case STMT_KIND_BLOCK: {
-    tc_check_block_stmt(tc, stmt);
-    break;
-  }
-  case STMT_KIND_IF: {
-    tc_check_if_stmt(tc, stmt);
-    break;
-  }
-  case STMT_KIND_WHILE: {
-    tc_check_while_stmt(tc, stmt);
-    break;
-  }
-  case STMT_KIND_FOR: {
-    tc_check_for_stmt(tc, stmt);
-    break;
-  }
+  case STMT_KIND_VARIABLE_DECL:
+    return tc_check_variable_decl_stmt(tc, stmt);
+  case STMT_KIND_FUNCTION_DECL:
+    return tc_check_function_decl_stmt(tc, stmt);
+  case STMT_KIND_BLOCK:
+    return tc_check_block_stmt(tc, stmt);
+  case STMT_KIND_IF:
+    return tc_check_if_stmt(tc, stmt);
+  case STMT_KIND_WHILE:
+    return tc_check_while_stmt(tc, stmt);
+  case STMT_KIND_FOR:
+    return tc_check_for_stmt(tc, stmt);
+  case STMT_KIND_RETURN:
+    return tc_check_return_stmt(tc, stmt);
   default: {
     fprintf(stderr, "ERROR: unreachable (tc_check_stmt).\n");
     exit(1);
@@ -220,7 +348,9 @@ Type tc_check_identifier_expr(TypeChecker *tc, Expr *expr) {
                     SV_ARG(ident->identifier_token.lexeme));
   }
 
-  return symbol->type;
+  return symbol->kind == SYMBOL_KIND_FUNCTION
+             ? tc_get_type(tc, SV_LIT("function"))
+             : symbol->as.variable.type;
 }
 
 Type tc_check_unary_expr(TypeChecker *tc, Expr *expr) {
@@ -307,7 +437,15 @@ Type tc_check_assignment_expr(TypeChecker *tc, Expr *expr) {
                     SV_ARG(assignment->identifier_token.lexeme));
   }
 
-  if (symbol->constant) {
+  if (symbol->kind != SYMBOL_KIND_VARIABLE) {
+    ErrorContext ctx = {.source = tc->source, .span = expr->span};
+    error_throw_fmt(&ctx, "attempt to assign a non-variable: " SV_FMT ".",
+                    SV_ARG(assignment->identifier_token.lexeme));
+  }
+
+  SymbolVariable *variable = &symbol->as.variable;
+
+  if (variable->constant) {
     ErrorContext ctx = {
         .source = tc->source,
         .span = expr->span,
@@ -317,7 +455,7 @@ Type tc_check_assignment_expr(TypeChecker *tc, Expr *expr) {
   }
 
   Type type = tc_check_expr(tc, assignment->value);
-  if (!type_is_equal(type, symbol->type)) {
+  if (!type_is_equal(type, variable->type)) {
     ErrorContext ctx = {
         .source = tc->source,
         .span = expr->span,
@@ -325,11 +463,11 @@ Type tc_check_assignment_expr(TypeChecker *tc, Expr *expr) {
     error_throw_fmt(&ctx,
                     "attempt to assign a '" SV_FMT "' value to a '" SV_FMT
                     "' variable.",
-                    SV_ARG(type.identifier), SV_ARG(symbol->type.identifier));
+                    SV_ARG(type.identifier), SV_ARG(variable->type.identifier));
   }
 
-  symbol->type = type;
-  symbol->value_expr = assignment->value;
+  variable->type = type;
+  variable->value_expr = assignment->value;
 
   return type;
 }
@@ -360,6 +498,53 @@ Type tc_check_when_expr(TypeChecker *tc, Expr *expr) {
   return consequent_type;
 }
 
+Type tc_check_call_expr(TypeChecker *tc, Expr *expr) {
+  CallExpr *call = &expr->as.call;
+  Symbol *symbol = symtable_get(tc->symbols, call->identifier_token.lexeme);
+  if (symbol == NULL) {
+    ErrorContext ctx = {.source = tc->source, .span = expr->span};
+    error_throw(&ctx, "attempt to call a undefined function.");
+  }
+
+  if (symbol->kind != SYMBOL_KIND_FUNCTION) {
+    ErrorContext ctx = {.source = tc->source, .span = expr->span};
+    error_throw(&ctx, "attempt to call a non-function symbol.");
+  }
+
+  SymbolFunction *function = &symbol->as.func;
+  u32 function_arity = array_list_length(function->params_variables);
+  u32 call_arity = array_list_length(call->arguments);
+  if (call_arity != function_arity) {
+    ErrorContext ctx = {.source = tc->source, .span = expr->span};
+    error_throw_fmt(&ctx,
+                    "function '" SV_FMT
+                    "' expects %u arguments, but has called with %u arguments.",
+                    SV_ARG(call->identifier_token.lexeme), function_arity,
+                    call_arity);
+  }
+
+  for (u32 i = 0; i < function_arity; i++) {
+    FunctionDeclParam *param_decl = array_list_at(function->stmt->params, i);
+    SymbolVariable *param_symb = array_list_at(function->params_variables, i);
+    Expr *argument_expr = array_list_at(call->arguments, i);
+    Type argument_type = tc_check_expr(tc, argument_expr);
+
+    if (!type_is_equal(param_symb->type, argument_type)) {
+      ErrorContext ctx = {
+          .source = tc->source,
+          .span = argument_expr->span,
+      };
+      error_throw_fmt(
+          &ctx,
+          "function '" SV_FMT
+          "' param '"SV_FMT"' expects argument of type '"SV_FMT"', but has called with argument of type '"SV_FMT"'.",
+          SV_ARG(call->identifier_token.lexeme), SV_ARG(param_decl->identifier_token.lexeme), SV_ARG(param_symb->type.identifier), SV_ARG(argument_type.identifier));
+    }
+  }
+
+  return function->return_type;
+}
+
 Type tc_check_expr(TypeChecker *tc, Expr *expr) {
   switch (expr->kind) {
   case EXPR_KIND_LITERAL:
@@ -378,6 +563,8 @@ Type tc_check_expr(TypeChecker *tc, Expr *expr) {
     return tc_check_assignment_expr(tc, expr);
   case EXPR_KIND_WHEN:
     return tc_check_when_expr(tc, expr);
+  case EXPR_KIND_CALL:
+    return tc_check_call_expr(tc, expr);
   default: {
     fprintf(stderr, "ERROR: unreachable (tc_check_expr).\n");
     exit(1);
