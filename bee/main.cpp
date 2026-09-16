@@ -1,6 +1,11 @@
+#include "bee/lexer/Token.hpp"
 #include <iostream>
 
-int main(void) {  
-  std::cout << "Hello, World" << std::endl;
+using bee::lexer::Token;
+using bee::lexer::TokenKind;
+
+int main(void) {
+  Token token(TokenKind::StringLit, "Hello, World!");
+  std::cout << token.ToString() << std::endl;
   return 0;
 }
