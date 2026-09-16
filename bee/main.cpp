@@ -6,6 +6,6 @@ using bee::lexer::TokenKind;
 
 int main(void) {
   Token token(TokenKind::StringLit, "Hello, World!");
-  std::cout << token.ToString() << std::endl;
+  std::cout << token.toString() << std::endl;
   return 0;
 }

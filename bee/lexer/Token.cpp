@@ -7,10 +7,10 @@
 
 namespace bee::lexer {
 Token::Token(TokenKind kind, std::string_view lexeme)
-    : m_Kind(kind), m_Lexeme(lexeme) {}
+    : m_kind(kind), m_lexeme(lexeme) {}
 
-std::string Token::ToString() const {
-  return std::format("Token (kind={}, lexeme=\"{}\")", GetTokenKindName(m_Kind), m_Lexeme);
+std::string Token::toString() const {
+  return std::format("Token (kind={}, lexeme=\"{}\")", getTokenKindName(m_kind), m_lexeme);
 }  
 
 constexpr std::array keywordsEntries = std::to_array<TokenEntry>({
@@ -93,7 +93,7 @@ constexpr std::array tokenKindNameEntries = std::to_array<TokenEntry>({
     {TokenKind::EndOfFile, "EndOfFile_SPE"},
 });
 
-TokenKind GetKeywordTokenKind(std::string_view keyword) {
+TokenKind getKeywordTokenKind(std::string_view keyword) {
   auto it = std::find_if(
       symbolsEntries.begin(), symbolsEntries.end(),
       [keyword](const TokenEntry &entry) { return entry.lexeme == keyword; });
@@ -101,7 +101,7 @@ TokenKind GetKeywordTokenKind(std::string_view keyword) {
   return it == symbolsEntries.end() ? TokenKind::Identifier : it->kind;
 }
 
-TokenKind GetSymbolTokenKind(std::string_view symbol) {
+TokenKind getSymbolTokenKind(std::string_view symbol) {
   auto it = std::find_if(
       symbolsEntries.begin(), symbolsEntries.end(),
       [symbol](const TokenEntry &entry) { return entry.lexeme == symbol; });
@@ -109,7 +109,7 @@ TokenKind GetSymbolTokenKind(std::string_view symbol) {
   return it == symbolsEntries.end() ? TokenKind::Invalid : it->kind;
 }
 
-std::string_view GetTokenKindName(TokenKind kind) {
+std::string_view getTokenKindName(TokenKind kind) {
   auto it = std::find_if(
       tokenKindNameEntries.begin(), tokenKindNameEntries.end(),
       [kind](const TokenEntry &entry) { return entry.kind == kind; });
@@ -117,7 +117,7 @@ std::string_view GetTokenKindName(TokenKind kind) {
   return it == tokenKindNameEntries.end() ? "Invalid_SPE" : it->lexeme;
 }
 
-std::size_t GetUnaryOperatorPriority(TokenKind op) {
+std::size_t getUnaryOperatorPriority(TokenKind op) {
   switch (op) {
   case TokenKind::PlusSym:
   case TokenKind::MinusSym:
@@ -128,7 +128,7 @@ std::size_t GetUnaryOperatorPriority(TokenKind op) {
   }    
 }
 
-std::size_t GetBinaryOperatorPriority(TokenKind op) {
+std::size_t getBinaryOperatorPriority(TokenKind op) {
   switch (op) {
   case TokenKind::StarSym:
   case TokenKind::SlashSym:

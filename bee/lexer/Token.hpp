@@ -63,10 +63,10 @@ enum class TokenKind {
 class Token {
 public:
   Token(TokenKind kind, std::string_view lexeme);
-  std::string ToString() const;
+  std::string toString() const;
 private:
-  TokenKind m_Kind;
-  std::string_view m_Lexeme;  
+  TokenKind m_kind;
+  std::string_view m_lexeme;  
 };
 
 struct TokenEntry {
@@ -74,12 +74,12 @@ struct TokenEntry {
   std::string_view lexeme;
 };  
 
-TokenKind GetKeywordTokenKind(std::string_view keyword);
-TokenKind GetSymbolTokenKind(std::string_view symbol);
-std::string_view GetTokenKindName(TokenKind kind);
+TokenKind getKeywordTokenKind(std::string_view keyword);
+TokenKind getSymbolTokenKind(std::string_view symbol);
+std::string_view getTokenKindName(TokenKind kind);
 
-std::size_t GetUnaryOperatorPriority(TokenKind op);
-std::size_t GetBinaryOperatorPriority(TokenKind op);
+std::size_t getUnaryOperatorPriority(TokenKind op);
+std::size_t getBinaryOperatorPriority(TokenKind op);
 
 } // namespace bee::lexer
 
