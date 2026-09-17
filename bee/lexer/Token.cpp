@@ -2,16 +2,18 @@
 #include <array>
 #include <bee/lexer/Token.hpp>
 #include <cstddef>
-#include <string_view>
 #include <format>
+#include <string>
+#include <string_view>
 
 namespace bee::lexer {
-Token::Token(TokenKind kind, std::string_view lexeme)
-    : m_kind(kind), m_lexeme(lexeme) {}
+
+Token::Token(TokenKind kind, std::string_view lexeme, SourceSpan span)
+    : m_kind(kind), m_lexeme(lexeme), m_span(span) {}
 
 std::string Token::toString() const {
-  return std::format("Token (kind={}, lexeme=\"{}\")", getTokenKindName(m_kind), m_lexeme);
-}  
+  return std::format("Token (kind={}, lexeme=\"{}\")", getTokenKindName(m_kind), std::string(m_lexeme));
+}
 
 constexpr std::array keywordsEntries = std::to_array<TokenEntry>({
     {TokenKind::LetKw, "let"},     {TokenKind::ConstKw, "const"},
@@ -125,7 +127,7 @@ std::size_t getUnaryOperatorPriority(TokenKind op) {
     return 6;
   default:
     return 0;
-  }    
+  }
 }
 
 std::size_t getBinaryOperatorPriority(TokenKind op) {
@@ -150,7 +152,7 @@ std::size_t getBinaryOperatorPriority(TokenKind op) {
     return 1;
   default:
     return 0;
-  }    
-}  
+  }
+}
 
 } // namespace bee::lexer

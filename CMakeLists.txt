@@ -6,10 +6,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_executable(bee
-	bee/main.cpp
-	bee/lexer/Token.cpp
-)
+file(GLOB_RECURSE SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/bee/*.cpp")
+add_executable(bee ${SOURCES})
 
 target_include_directories(bee
 	PRIVATE
