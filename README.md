@@ -18,23 +18,7 @@ echo sum(a, b)
 Configure the project with CMake:
 ```console
 $ cmake -S . -B build -G Ninja
-```
-
-Build with Ninja:
-```console
 $ ninja -C build
 ```
 
-The executable will be generated at:
-```text
-build/bee
-```
-
-## Run
-Run the interpreter:
-```console
-$ ./build/bee
-```
-
-## Status
-BEE is currently under development. The language syntax, standard library, and runtime are subject to change.
+The executable will be generated at `build/bee`
