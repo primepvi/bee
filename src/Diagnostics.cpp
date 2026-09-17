@@ -1,12 +1,11 @@
 #include <algorithm>
 #include <array>
-#include <bee/Diagnostics.hpp>
 #include <format>
 #include <ostream>
-#include <stdexcept>
-#include <utility>
 
-namespace bee::diagnostics {
+#include "bee/Diagnostics.hpp"
+
+namespace bee {
 
 constexpr std::array diagnosticsMessageEntries =
     std::to_array<DiagnosticEntry>({
@@ -53,11 +52,11 @@ void DiagnosticBag::report(DiagnosticLevel level, DiagnosticCode code,
 }
 
 void DiagnosticBag::write(std::ostream &output) const {
-  for (const Diagnostic &diagnostic : m_diagnostics) {    
+  for (const Diagnostic &diagnostic : m_diagnostics) {
     std::string_view levelName = getDiagnosticLevelName(diagnostic.level);
     const auto linesSpan = m_source.linesSpan();
     const auto lineSpan = linesSpan.at(diagnostic.emphasis.line - 1);
-    
+
     const auto gutterWidth = linesSpan.size();
     std::string_view line =
         std::string_view(m_source.code())
@@ -69,8 +68,13 @@ void DiagnosticBag::write(std::ostream &output) const {
     output << std::format("{:>{}} | \n", "", gutterWidth);
     output << std::format("{:>{}} | {}\n", diagnostic.emphasis.line,
                           gutterWidth, line);
-    output << std::format("{:>{}} | {}{}\n", "", gutterWidth, std::string(diagnostic.emphasis.col, ' '), std::string(diagnostic.emphasis.end - diagnostic.emphasis.start, '^')) << std::endl;
+    output << std::format("{:>{}} | {}{}\n", "", gutterWidth,
+                          std::string(diagnostic.emphasis.col, ' '),
+                          std::string(diagnostic.emphasis.end -
+                                          diagnostic.emphasis.start,
+                                      '^'))
+           << std::endl;
   }
 }
 
-} // namespace bee::diagnostics
+} // namespace bee

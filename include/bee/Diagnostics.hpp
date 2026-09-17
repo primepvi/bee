@@ -1,16 +1,14 @@
 #ifndef BEE_DIAGNOSTICS_HPP
 #define BEE_DIAGNOSTICS_HPP
 
-#include <bee/Source.hpp>
+#include "bee/Source.hpp"
+
 #include <format>
 #include <string>
 #include <string_view>
 #include <vector>
 
-using bee::source::Source;
-using bee::source::SourceSpan;
-
-namespace bee::diagnostics {
+namespace bee {
 
 enum class DiagnosticLevel { Error, Warning };
 std::string_view getDiagnosticLevelName(DiagnosticLevel level);
@@ -21,7 +19,7 @@ enum class DiagnosticCode {
 };
 
 struct Diagnostic {
-  const Source &source;
+  const Source& source;
   std::string message;
   DiagnosticLevel level;
   DiagnosticCode code;
@@ -35,7 +33,7 @@ struct DiagnosticEntry {
 
 class DiagnosticBag {
 public:
-  DiagnosticBag(const Source &source);
+  DiagnosticBag(const Source& source);
 
   void report(DiagnosticLevel level, DiagnosticCode code, SourceSpan span, std::format_args args);
   void write(std::ostream &output) const;

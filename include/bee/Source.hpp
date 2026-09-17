@@ -6,7 +6,7 @@
 #include <string_view>
 #include <vector>
 
-namespace bee::source {
+namespace bee {
 
 struct SourceSpan {
   std::size_t line;

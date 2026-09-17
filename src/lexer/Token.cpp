@@ -1,18 +1,20 @@
 #include <algorithm>
 #include <array>
-#include <bee/lexer/Token.hpp>
 #include <cstddef>
 #include <format>
 #include <string>
 #include <string_view>
 
+#include "bee/lexer/Token.hpp"
+
 namespace bee::lexer {
 
-Token::Token(TokenKind kind, std::string_view lexeme, SourceSpan span)
+Token::Token(TokenKind kind, std::string_view lexeme, bee::SourceSpan span)
     : m_kind(kind), m_lexeme(lexeme), m_span(span) {}
 
 std::string Token::toString() const {
-  return std::format("Token (kind={}, lexeme=\"{}\")", getTokenKindName(m_kind), std::string(m_lexeme));
+  return std::format("Token (kind={}, lexeme=\"{}\")", getTokenKindName(m_kind),
+                     std::string(m_lexeme));
 }
 
 constexpr std::array keywordsEntries = std::to_array<TokenEntry>({

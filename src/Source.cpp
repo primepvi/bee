@@ -1,7 +1,8 @@
-#include <bee/Source.hpp>
 #include <fstream>
 
-namespace bee::source {
+#include "bee/Source.hpp"
+
+namespace bee {
 
 Source::Source(std::string_view name, std::string code)
     : m_name(name), m_code(code) {
@@ -44,4 +45,4 @@ Source Source::fromFile(std::string_view path) {
   return Source(path, code);
 }
 
-} // namespace bee::source
+} // namespace bee

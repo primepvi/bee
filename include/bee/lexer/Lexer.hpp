@@ -4,21 +4,14 @@
 #include "bee/Diagnostics.hpp"
 #include "bee/Source.hpp"
 #include "bee/lexer/Token.hpp"
+
 #include <cstddef>
 
 namespace bee::lexer {
 
-using bee::diagnostics::DiagnosticBag;
-
-using bee::lexer::Token;
-using bee::lexer::TokenKind;
-
-using bee::source::Source;
-using bee::source::SourceSpan;
-
 class Lexer {
 public:
-  Lexer(const Source &source, DiagnosticBag &bag);
+  Lexer(const bee::Source& source, bee::DiagnosticBag& bag);
   inline bool hasMoreTokens() const {
     return m_cursor < m_source.code().length();
   }
@@ -27,8 +20,8 @@ public:
 
 private:
   std::size_t m_cursor, m_line, m_col;
-  const Source &m_source;
-  DiagnosticBag &m_bag;
+  const bee::Source& m_source;
+  bee::DiagnosticBag& m_bag;
 
   inline char peek() const { return m_source.code().at(m_cursor); }
   inline char lookahead() const { return m_source.code().at(m_cursor + 1); }
@@ -38,7 +31,7 @@ private:
     m_col += 1;
   }
 
-  inline SourceSpan span(std::size_t length) const {
+  inline bee::SourceSpan span(std::size_t length) const {
     return {.line = m_line,
             .col = m_col - length - 1,
             .start = m_cursor - length,

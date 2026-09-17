@@ -1,13 +1,12 @@
 #ifndef BEE_TOKEN_HPP
 #define BEE_TOKEN_HPP
 
-#include <bee/Source.hpp>
+#include "bee/Source.hpp"
+
 #include <cstddef>
 #include <string_view>
 
 namespace bee::lexer {
-
-using bee::source::SourceSpan;
 
 enum class TokenKind {
   // Keywords
@@ -65,17 +64,17 @@ enum class TokenKind {
 
 class Token {
 public:
-  Token(TokenKind kind, std::string_view lexeme, SourceSpan m_span);
+  Token(TokenKind kind, std::string_view lexeme, bee::SourceSpan m_span);
   std::string toString() const;
 
   inline TokenKind kind() const { return m_kind; }
   inline std::string_view lexeme() const { return m_lexeme; }
-  inline SourceSpan span() const { return m_span; }
+  inline bee::SourceSpan span() const { return m_span; }
 
 private:
   TokenKind m_kind;
   std::string_view m_lexeme;
-  SourceSpan m_span;
+  bee::SourceSpan m_span;
 };
 
 struct TokenEntry {
