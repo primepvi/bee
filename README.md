@@ -4,7 +4,7 @@ A tiny interpreted programming language written in C++.
 
 ## Example
 
-```bee
+```ts
 fn sum(a: int, b: int) -> a + b
 
 const a = 10
