@@ -40,7 +40,8 @@ constexpr std::array symbolsEntries = std::to_array<TokenEntry>({
     {TokenKind::ArrowSym, "->"},     {TokenKind::CommaSym, ","},
     {TokenKind::PlusSym, "+"},       {TokenKind::MinusSym, "-"},
     {TokenKind::StarSym, "*"},       {TokenKind::SlashSym, "/"},
-    {TokenKind::PercentageSym, "%"},
+    {TokenKind::PercentageSym, "%"}, {TokenKind::DoubleDotSym, ".."},
+    {TokenKind::PipeSym, "|"},
 });
 
 constexpr std::array tokenKindNameEntries = std::to_array<TokenEntry>({
@@ -91,6 +92,8 @@ constexpr std::array tokenKindNameEntries = std::to_array<TokenEntry>({
     {TokenKind::StarSym, "Star_SYM"},
     {TokenKind::SlashSym, "Slash_SYM"},
     {TokenKind::PercentageSym, "Percentage_SYM"},
+    {TokenKind::DoubleDotSym, "DoubleDot_SYM"},
+    {TokenKind::PipeSym, "Pipe_SYM"},
 
     // Specials
     {TokenKind::Invalid, "Invalid_SPE"},

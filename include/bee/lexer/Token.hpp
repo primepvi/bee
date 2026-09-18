@@ -56,6 +56,8 @@ enum class TokenKind {
   StarSym,
   SlashSym,
   PercentageSym,
+  DoubleDotSym,
+  PipeSym,
 
   // Specials
   Invalid,

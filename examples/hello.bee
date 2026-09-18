@@ -1,2 +1,13 @@
-echo "Hello, World!"
-echo 1 + 1 == 2
+const a = 10
+const b: Int? = null
+let result: Int = undefined
+
+if b != null do |c| # c is non-nullable b
+   result = a + c
+else
+   result = 0
+end
+
+for 0..10, 2 do |i|
+    echo i
+end

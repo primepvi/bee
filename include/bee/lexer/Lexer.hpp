@@ -1,11 +1,11 @@
 #ifndef BEE_LEXER_HPP
 #define BEE_LEXER_HPP
 
+#include <cstddef>
+
 #include "bee/Diagnostics.hpp"
 #include "bee/Source.hpp"
 #include "bee/lexer/Token.hpp"
-
-#include <cstddef>
 
 namespace bee::lexer {
 
