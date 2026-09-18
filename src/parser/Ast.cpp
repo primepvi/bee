@@ -116,4 +116,133 @@ CallExpr::CallExpr(bee::lexer::Token identifier, bee::lexer::Token openParen,
 InvalidExpr::InvalidExpr(bee::lexer::Token invalid)
     : m_invalid(invalid), m_span(invalid.span()) {}
 
+VariableDeclarationStmt::VariableDeclarationStmt(
+    bee::lexer::Token keyword, bee::lexer::Token identifier,
+    bee::lexer::Token assignment, std::optional<TypeAnnotation> typeAnnotation,
+    std::unique_ptr<Expr> value)
+    : m_keyword(keyword), m_identifier(identifier), m_assignment(assignment),
+      m_typeAnnotation(typeAnnotation), m_value(std::move(value)) {
+
+  bee::SourceSpan keywordSpan = keyword.span();
+
+  m_span = {
+      .line = keywordSpan.line,
+      .col = keywordSpan.col,
+      .start = keywordSpan.start,
+      .end = value->span().end,
+  };
+}
+
+FunctionDeclarationStmt::FunctionDeclarationStmt(
+    bee::lexer::Token keyword, bee::lexer::Token identifier,
+    TypeAnnotation typeAnnotation, std::vector<FunctionDeclarationParam> params,
+    std::unique_ptr<Stmt> body)
+    : m_keyword(keyword), m_identifier(identifier),
+      m_typeAnnotation(typeAnnotation), m_params(std::move(params)),
+      m_body(std::move(body)) {
+
+  bee::SourceSpan keywordSpan = keyword.span();
+
+  m_span = {
+      .line = keywordSpan.line,
+      .col = keywordSpan.col,
+      .start = keywordSpan.start,
+      .end = m_body->span().end,
+  };
+}
+
+ReturnStmt::ReturnStmt(bee::lexer::Token keyword, std::unique_ptr<Expr> expr)
+    : m_keyword(keyword), m_expr(std::move(expr)) {
+  bee::SourceSpan keywordSpan = keyword.span();
+
+  m_span = {
+      .line = keywordSpan.line,
+      .col = keywordSpan.col,
+      .start = keywordSpan.start,
+      .end = m_expr->span().end,
+  };
+}
+
+ExprStmt::ExprStmt(std::unique_ptr<Expr> expr) : m_expr(std::move(expr)) {
+  m_span = m_expr->span();
+}
+
+EchoStmt::EchoStmt(bee::lexer::Token keyword, std::unique_ptr<Expr> message)
+    : m_keyword(keyword), m_message(std::move(message)) {
+  bee::SourceSpan keywordSpan = keyword.span();
+
+  m_span = {
+      .line = keywordSpan.line,
+      .col = keywordSpan.col,
+      .start = keywordSpan.start,
+      .end = m_message->span().end,
+  };
+}
+
+IfStmt::IfStmt(bee::lexer::Token keyword, std::unique_ptr<Expr> condition,
+               std::unique_ptr<Stmt> consequent,
+               std::unique_ptr<Stmt> alternate)
+    : m_keyword(keyword), m_condition(std::move(condition)),
+      m_consequent(std::move(consequent)), m_alternate(std::move(alternate)) {
+
+  bee::SourceSpan keywordSpan = keyword.span();
+  bee::SourceSpan endSpan = !alternate ? consequent->span() : alternate->span();
+
+  m_span = {
+      .line = keywordSpan.line,
+      .col = keywordSpan.col,
+      .start = keywordSpan.start,
+      .end = endSpan.end,
+  };
+}
+
+WhileStmt::WhileStmt(bee::lexer::Token keyword, std::unique_ptr<Expr> condition,
+                     std::unique_ptr<Stmt> body)
+    : m_keyword(keyword), m_condition(std::move(condition)),
+      m_body(std::move(body)) {
+  bee::SourceSpan keywordSpan = keyword.span();
+
+  m_span = {
+      .line = keywordSpan.line,
+      .col = keywordSpan.col,
+      .start = keywordSpan.start,
+      .end = m_body->span().end,
+  };
+}
+
+ForStmt::ForStmt(bee::lexer::Token keyword, std::unique_ptr<Expr> range,
+                 std::unique_ptr<Expr> increment, std::unique_ptr<Stmt> body)
+    : m_keyword(keyword), m_range(std::move(range)),
+      m_increment(std::move(increment)), m_body(std::move(body)) {
+  bee::SourceSpan keywordSpan = keyword.span();
+
+  m_span = {
+      .line = keywordSpan.line,
+      .col = keywordSpan.col,
+      .start = keywordSpan.start,
+      .end = m_body->span().end,
+  };
+}
+
+BlockStmt::BlockStmt(bee::lexer::Token openKeyword,
+                     std::optional<BlockCaptureAnnotation> captureAnnotation,
+                     std::vector<std::unique_ptr<Stmt>> stmts,
+                     bee::lexer::Token closeKeyword)
+
+    : m_openKeyword(openKeyword), m_closeKeyword(closeKeyword),
+      m_captureAnnotation(captureAnnotation), m_stmts(std::move(stmts)) {
+
+  bee::SourceSpan keywordSpan = openKeyword.span();
+
+  m_span = {
+      .line = keywordSpan.line,
+      .col = keywordSpan.col,
+      .start = keywordSpan.start,
+      .end = closeKeyword.span().end,
+  };
+}
+
+InvalidStmt::InvalidStmt(bee::lexer::Token invalid)
+    : m_invalid(invalid), m_span(invalid.span()) {}
+
 } // namespace bee::parser

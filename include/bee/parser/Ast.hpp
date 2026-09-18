@@ -342,7 +342,7 @@ public:
 
 private:
   bee::lexer::Token m_openKeyword, m_closeKeyword;
-  std::optional<BlockCaptureAnnotation> captureAnnotation;
+  std::optional<BlockCaptureAnnotation> m_captureAnnotation;
   std::vector<std::unique_ptr<Stmt>> m_stmts;
   bee::SourceSpan m_span;
 };
