@@ -129,7 +129,7 @@ std::size_t getUnaryOperatorPriority(TokenKind op) {
   case TokenKind::PlusSym:
   case TokenKind::MinusSym:
   case TokenKind::NotKw:
-    return 6;
+    return 7;
   default:
     return 0;
   }
@@ -140,16 +140,18 @@ std::size_t getBinaryOperatorPriority(TokenKind op) {
   case TokenKind::StarSym:
   case TokenKind::SlashSym:
   case TokenKind::PercentageSym:
-    return 5;
+    return 6;
   case TokenKind::PlusSym:
   case TokenKind::MinusSym:
+    return 5;
+  case TokenKind::DoubleDotSym:
     return 4;
   case TokenKind::GtSym:
   case TokenKind::GteSym:
   case TokenKind::LtSym:
   case TokenKind::LteSym:
   case TokenKind::EqEqSym:
-  case TokenKind::NeqSym:
+  case TokenKind::NeqSym:    
     return 3;
   case TokenKind::OrKw:
     return 2;

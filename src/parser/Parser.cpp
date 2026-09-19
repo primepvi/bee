@@ -2,7 +2,6 @@
 #include "bee/Source.hpp"
 #include "bee/lexer/Token.hpp"
 #include "bee/parser/Ast.hpp"
-#include <iostream>
 #include <memory>
 #include <optional>
 #include <span>
@@ -34,15 +33,6 @@ std::unique_ptr<Expr> Parser::parseLiteralExpr() {
 std::unique_ptr<Expr> Parser::parseIdentifierExpr() {
   IdentifierExpr identifierExpr(eat());
   return std::make_unique<IdentifierExpr>(identifierExpr);
-}
-
-std::unique_ptr<Expr> Parser::parseRangeExpr() {
-  std::unique_ptr<Expr> start = parseExpr();
-  Token symbol = expectToken(TokenKind::DoubleDotSym, "..");
-  std::unique_ptr<Expr> end = parseExpr();
-
-  RangeExpr rangeExpr(std::move(start), symbol, std::move(end));
-  return std::make_unique<RangeExpr>(std::move(rangeExpr));
 }
 
 std::unique_ptr<Expr> Parser::parseAssignmentExpr() {
@@ -102,8 +92,8 @@ std::unique_ptr<Expr> Parser::parsePrimaryExpr() {
   case TokenKind::NullKw:
   case TokenKind::TrueKw:
   case TokenKind::FalseKw:
-  case TokenKind::NumberLit:
   case TokenKind::StringLit:
+  case TokenKind::NumberLit:
     return parseLiteralExpr();
 
   case TokenKind::OpenParenSym:
@@ -283,6 +273,7 @@ std::unique_ptr<Stmt> Parser::parseFunctionDeclarationStmt() {
   } else {
     auto endKinds = std::to_array<TokenKind>({TokenKind::EndKw});
     body = parseBlockStmt(endKinds);
+    expectToken(TokenKind::EndKw, "end");
   }
 
   FunctionDeclarationStmt functionDeclStmt(keyword, identifier, typeAnnotation,
@@ -317,30 +308,22 @@ std::unique_ptr<Stmt> Parser::parseIfStmt() {
   Token keyword = eat();
   std::unique_ptr<Expr> condition = parseExpr();
 
-  std::unique_ptr<Stmt> consequent = nullptr;
-  if (peek().kind() == TokenKind::ArrowSym) {
-    eat();
-    consequent = parseStmt();
-  } else {
-    auto endKinds = std::to_array<TokenKind>({TokenKind::EndKw});
-    consequent = parseBlockStmt(endKinds);
-  }
+  auto endKinds =
+      std::to_array<TokenKind>({TokenKind::EndKw, TokenKind::ElseKw});
 
+  std::unique_ptr<Stmt> consequent = parseBlockStmt(endKinds);
   std::unique_ptr<Stmt> alternate = nullptr;
+
   if (peek().kind() == TokenKind::ElseKw) {
     eat();
-    alternate = parseIfStmt();
-  } else if (peek().kind() == TokenKind::ArrowSym) {
-    eat();
-    alternate = parseStmt();
-  } else {
-    auto endKinds =
-        std::to_array<TokenKind>({TokenKind::EndKw, TokenKind::ElseKw});
-    alternate = parseBlockStmt(endKinds);
-  }
 
-  if (consequent->kind() == StmtKind::Block &&
-      (!alternate || alternate->kind() == StmtKind::If)) {
+    if (peek().kind() == TokenKind::IfKw) {
+      alternate = parseIfStmt();
+    } else {
+      alternate = parseBlockStmt(endKinds);
+      expectToken(TokenKind::EndKw, "end");
+    }
+  } else {
     expectToken(TokenKind::EndKw, "end");
   }
 
@@ -351,31 +334,8 @@ std::unique_ptr<Stmt> Parser::parseIfStmt() {
 
 std::unique_ptr<Stmt> Parser::parseBlockStmt(std::span<TokenKind> endKinds) {
   Token openKeyword = eat();
-  std::optional<Token> closeKeyword = std::nullopt;
 
-  std::vector<std::unique_ptr<Stmt>> stmts;
-  while (hasMoreTokens()) {
-    Token current = peek();
-    auto predicate = [current](const TokenKind &kind) {
-      return current.kind() == kind;
-    };
-
-    auto it = std::find_if(endKinds.begin(), endKinds.end(), predicate);
-    if (it != endKinds.end()) {
-      closeKeyword = eat();
-      break;
-    }
-
-    stmts.push_back(parseStmt());
-  }
-
-  if (closeKeyword == std::nullopt) {
-    // TODO: add unterminated block stmt diagnostic.
-    m_panic = true;
-    closeKeyword = peek();
-  }
-
-  std::optional<BlockCaptureAnnotation> captureAnnotation = std::nullopt;
+  std::optional<BlockCaptureAnnotation> captureAnnotation;
   if (peek().kind() == TokenKind::PipeSym) {
     Token openPipe = eat();
 
@@ -399,8 +359,31 @@ std::unique_ptr<Stmt> Parser::parseBlockStmt(std::span<TokenKind> endKinds) {
     };
   }
 
+  std::vector<std::unique_ptr<Stmt>> stmts;
+  while (hasMoreTokens()) {
+    Token current = peek();
+
+    auto predicate = [current](const TokenKind &kind) {
+      return current.kind() == kind;
+    };
+
+    auto it = std::find_if(endKinds.begin(), endKinds.end(), predicate);
+    if (it != endKinds.end()) {
+      break;
+    }
+
+    stmts.push_back(parseStmt());
+  }
+
+  if (!hasMoreTokens()) {
+    m_panic = true;
+    // TODO: add unterminated block diagnostic.
+  }
+
+  Token closeKeyword = peek();
   BlockStmt blockStmt(openKeyword, captureAnnotation, std::move(stmts),
-                      closeKeyword.value());
+                      closeKeyword);
+
   return std::make_unique<BlockStmt>(std::move(blockStmt));
 }
 
@@ -415,6 +398,7 @@ std::unique_ptr<Stmt> Parser::parseWhileStmt() {
   } else {
     auto endKinds = std::to_array({TokenKind::EndKw});
     body = parseBlockStmt(endKinds);
+    expectToken(TokenKind::EndKw, "end");
   }
 
   WhileStmt whileStmt(keyword, std::move(condition), std::move(body));
@@ -437,6 +421,7 @@ std::unique_ptr<Stmt> Parser::parseForStmt() {
   } else {
     auto endKinds = std::to_array({TokenKind::EndKw});
     body = parseBlockStmt(endKinds);
+    expectToken(TokenKind::EndKw, "end");
   }
 
   ForStmt forStmt(keyword, std::move(iterator), std::move(step),

@@ -1,14 +1,22 @@
 const a = 10
 const b: Int? = null
-let result: Int = 10
 
-for 0..10, 2 do |i|
+fn main(): void
+   let message: String = "Hello, World!"
+   echo message   
+end
+
+fn sum(a: int, b: int): int -> a + b
+fn nothing(): void do end
+
+for 0..10 do |i|
     echo i
 end
 
-if b != null do |c|
-   result = a + c
-else
-   result = 0
+while true -> echo nothing()
+
+if a == b do
+else if b == -1 do
+else do
 end
 

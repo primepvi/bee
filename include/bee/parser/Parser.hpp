@@ -11,10 +11,10 @@
 namespace bee::parser {
 
 class Parser {
-public:  
+public:
   Parser(const bee::Source &source, bee::DiagnosticBag &bag,
          const std::vector<bee::lexer::Token> &tokens);
-
+  
   Program parse();
   
 private:
@@ -37,7 +37,6 @@ private:
   std::unique_ptr<Expr> parseExpr();
   std::unique_ptr<Expr> parseLiteralExpr();
   std::unique_ptr<Expr> parseIdentifierExpr();
-  std::unique_ptr<Expr> parseRangeExpr();
   std::unique_ptr<Expr> parseAssignmentExpr();
   std::unique_ptr<Expr> parseParenthesizedExpr();
   std::unique_ptr<Expr> parseWhenExpr();

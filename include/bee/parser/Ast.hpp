@@ -13,7 +13,6 @@ namespace bee::parser {
 enum class ExprKind {
   Literal,
   Identifier,
-  Range,
   Assignment,
   Binary,
   Unary,
@@ -53,22 +52,6 @@ public:
 
 private:
   bee::lexer::Token m_identifier;
-  bee::SourceSpan m_span;
-};
-
-class RangeExpr : public Expr {
-public:
-  RangeExpr(std::unique_ptr<Expr> start, bee::lexer::Token symbol,
-            std::unique_ptr<Expr> end);
-
-  inline ExprKind kind() const override { return ExprKind::Range; }
-  inline bee::SourceSpan span() const override { return m_span; }
-  inline const std::unique_ptr<Expr> &start() const { return m_start; }
-  inline const std::unique_ptr<Expr> &end() const { return m_end; }
-
-private:
-  std::unique_ptr<Expr> m_start, m_end;
-  bee::lexer::Token m_symbol;
   bee::SourceSpan m_span;
 };
 
@@ -394,6 +377,8 @@ public:
   captureAnnotation() const {
     return m_captureAnnotation;
   }
+
+  inline const bee::lexer::Token& closeKeyword() const { return m_closeKeyword; }
 
   inline const std::vector<std::unique_ptr<Stmt>> &stmts() const {
     return m_stmts;

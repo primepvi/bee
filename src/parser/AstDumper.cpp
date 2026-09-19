@@ -155,10 +155,8 @@ void AstDumper::visitBlockStmt(const BlockStmt &stmt) {
   m_output << makeDumpStmt(m_prefix, symbol, "Block Statement");
 
   const auto childPrefix = makeDumpPrefix(m_prefix, m_isLast);
-  m_output << makeDumpProperty(childPrefix, LAST_SYM, "Statements:") << '\n';
-
   if (stmt.captureAnnotation()) {
-    m_output << makeDumpProperty(childPrefix, LAST_SYM, "Captures:") << '\n';
+    m_output << makeDumpProperty(childPrefix, COMMON_SYM, "Captures:") << '\n';
 
     BlockCaptureAnnotation annotation = stmt.captureAnnotation().value();
     const auto annotationPrefix = makeDumpPrefix(childPrefix, false);
@@ -169,7 +167,8 @@ void AstDumper::visitBlockStmt(const BlockStmt &stmt) {
                                    std::string(annotation.captures[i].lexeme())) << '\n';
     }
   }
-
+  
+  m_output << makeDumpProperty(childPrefix, LAST_SYM, "Statements:") << '\n';
   const auto statementsPrefix = makeDumpPrefix(childPrefix, true);
   for (std::size_t i = 0; i < stmt.stmts().size(); ++i) {
     const bool isLast = i == stmt.stmts().size() - 1;
@@ -231,18 +230,6 @@ void AstDumper::visitIdentifierExpr(const IdentifierExpr &expr) {
   const auto childPrefix = makeDumpPrefix(m_prefix, m_isLast);
   m_output << makeDumpProperty(childPrefix, LAST_SYM, "Identifier:");
   m_output << makeDumpValue(std::string(expr.identifier().lexeme())) << '\n';
-}
-
-void AstDumper::visitRangeExpr(const RangeExpr &expr) {
-  const auto symbol = m_isLast ? LAST_SYM : COMMON_SYM;
-  m_output << makeDumpExpr(m_prefix, symbol, "Range Expression");
-
-  const auto childPrefix = makeDumpPrefix(m_prefix, m_isLast);
-  m_output << makeDumpProperty(childPrefix, COMMON_SYM, "Start:") << '\n';
-  dumpExpr(*expr.start(), makeDumpPrefix(childPrefix, false), true);
-
-  m_output << makeDumpProperty(childPrefix, LAST_SYM, "End:") << '\n';
-  dumpExpr(*expr.end(), makeDumpPrefix(childPrefix, true), true);
 }
 
 void AstDumper::visitAssignmentExpr(const AssignmentExpr &expr) {

@@ -11,19 +11,6 @@ LiteralExpr::LiteralExpr(bee::lexer::Token value)
 IdentifierExpr::IdentifierExpr(bee::lexer::Token identifier)
     : m_identifier(identifier), m_span(identifier.span()) {}
 
-RangeExpr::RangeExpr(std::unique_ptr<Expr> start, bee::lexer::Token symbol,
-                     std::unique_ptr<Expr> end)
-    : m_start(std::move(start)), m_end(std::move(end)), m_symbol(symbol) {
-  bee::SourceSpan startSpan = m_start->span();
-
-  m_span = {
-      .line = startSpan.line,
-      .col = startSpan.col,
-      .start = startSpan.start,
-      .end = m_end->span().end,
-  };
-};
-
 AssignmentExpr::AssignmentExpr(bee::lexer::Token identifier,
                                bee::lexer::Token equal,
                                std::unique_ptr<Expr> value)

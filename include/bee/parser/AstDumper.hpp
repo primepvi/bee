@@ -35,7 +35,6 @@ public:
 
   void visitLiteralExpr(const LiteralExpr &expr) override;
   void visitIdentifierExpr(const IdentifierExpr &expr) override;
-  void visitRangeExpr(const RangeExpr &expr) override;
   void visitAssignmentExpr(const AssignmentExpr &expr) override;
   void visitBinaryExpr(const BinaryExpr &expr) override;
   void visitUnaryExpr(const UnaryExpr &expr) override;

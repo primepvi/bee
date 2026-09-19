@@ -15,8 +15,6 @@ public:
       return visitLiteralExpr(static_cast<const LiteralExpr &>(expr));
     case ExprKind::Identifier:
       return visitIdentifierExpr(static_cast<const IdentifierExpr &>(expr));
-    case ExprKind::Range:
-      return visitRangeExpr(static_cast<const RangeExpr &>(expr));
     case ExprKind::Assignment:
       return visitAssignmentExpr(static_cast<const AssignmentExpr &>(expr));
     case ExprKind::Binary:
@@ -37,7 +35,6 @@ public:
 
   virtual T visitLiteralExpr(const LiteralExpr &expr) = 0;
   virtual T visitIdentifierExpr(const IdentifierExpr &expr) = 0;
-  virtual T visitRangeExpr(const RangeExpr &expr) = 0;
   virtual T visitAssignmentExpr(const AssignmentExpr &expr) = 0;
   virtual T visitBinaryExpr(const BinaryExpr &expr) = 0;
   virtual T visitUnaryExpr(const UnaryExpr &expr) = 0;
