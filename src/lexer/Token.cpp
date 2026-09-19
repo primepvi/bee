@@ -102,10 +102,10 @@ constexpr std::array tokenKindNameEntries = std::to_array<TokenEntry>({
 
 TokenKind getKeywordTokenKind(std::string_view keyword) {
   auto it = std::find_if(
-      symbolsEntries.begin(), symbolsEntries.end(),
+      keywordsEntries.begin(), keywordsEntries.end(),
       [keyword](const TokenEntry &entry) { return entry.lexeme == keyword; });
 
-  return it == symbolsEntries.end() ? TokenKind::Identifier : it->kind;
+  return it == keywordsEntries.end() ? TokenKind::Identifier : it->kind;
 }
 
 TokenKind getSymbolTokenKind(std::string_view symbol) {

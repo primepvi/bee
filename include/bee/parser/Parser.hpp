@@ -10,13 +10,13 @@
 
 namespace bee::parser {
 
-typedef std::vector<std::unique_ptr<Stmt>> Program;
-
 class Parser {
+public:  
   Parser(const bee::Source &source, bee::DiagnosticBag &bag,
          const std::vector<bee::lexer::Token> &tokens);
 
   Program parse();
+  
 private:
   const bee::Source &m_source;
   bee::DiagnosticBag &m_bag;
@@ -25,8 +25,8 @@ private:
   bool m_panic = false;
 
   void synchronize();
-  
-  bee::lexer::Token expectToken(bee::lexer::TokenKind kind, const char *name);
+
+  bee::lexer::Token expectToken(bee::lexer::TokenKind kind, std::string name);
   bee::lexer::Token peek() const;
   bee::lexer::Token lookahead() const;
   bee::lexer::Token eat();
@@ -34,7 +34,7 @@ private:
   bool hasMoreTokens() const;
   bool canStartExpr() const;
 
-  std::unique_ptr<Expr> parseExpr();  
+  std::unique_ptr<Expr> parseExpr();
   std::unique_ptr<Expr> parseLiteralExpr();
   std::unique_ptr<Expr> parseIdentifierExpr();
   std::unique_ptr<Expr> parseRangeExpr();
@@ -55,7 +55,8 @@ private:
   std::unique_ptr<Stmt> parseExprStmt();
   std::unique_ptr<Stmt> parseEchoStmt();
   std::unique_ptr<Stmt> parseIfStmt();
-  std::unique_ptr<Stmt> parseBlockStmt(std::span<bee::lexer::TokenKind> endKinds);
+  std::unique_ptr<Stmt>
+  parseBlockStmt(std::span<bee::lexer::TokenKind> endKinds);
   std::unique_ptr<Stmt> parseWhileStmt();
   std::unique_ptr<Stmt> parseForStmt();
 };

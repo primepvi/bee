@@ -1,7 +1,6 @@
 #ifndef BEE_AST_HPP
 #define BEE_AST_HPP
 
-#include <algorithm>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -208,6 +207,8 @@ public:
   virtual bee::SourceSpan span() const = 0;
 };
 
+using Program = std::vector<std::unique_ptr<Stmt>>;
+
 struct TypeAnnotation {
   bee::lexer::Token colon;
   bee::lexer::Token identifier;
@@ -233,6 +234,7 @@ public:
   inline const std::optional<TypeAnnotation> &typeAnnotation() const {
     return m_typeAnnotation;
   }
+  inline const std::unique_ptr<Expr> &value() const { return m_value; }
 
 private:
   bee::lexer::Token m_keyword, m_identifier, m_assignment;
@@ -266,6 +268,7 @@ public:
   }
 
   inline const std::unique_ptr<Stmt> &body() const { return m_body; }
+  inline TypeAnnotation typeAnnotation() const { return m_typeAnnotation; }
 
 private:
   bee::lexer::Token m_keyword, m_identifier;
@@ -387,7 +390,8 @@ public:
   inline StmtKind kind() const override { return StmtKind::Block; }
   inline bee::SourceSpan span() const override { return m_span; }
 
-  inline const std::optional<BlockCaptureAnnotation> &captureAnnotation() const {
+  inline const std::optional<BlockCaptureAnnotation> &
+  captureAnnotation() const {
     return m_captureAnnotation;
   }
 
@@ -409,7 +413,7 @@ public:
   inline StmtKind kind() const override { return StmtKind::Invalid; }
   inline bee::SourceSpan span() const override { return m_span; }
   inline const bee::lexer::Token &invalid() const { return m_invalid; }
-  
+
 private:
   bee::lexer::Token m_invalid;
   bee::SourceSpan m_span;

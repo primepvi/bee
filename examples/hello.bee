@@ -1,13 +1,14 @@
 const a = 10
 const b: Int? = null
-let result: Int = undefined
+let result: Int = 10
 
-if b != null do |c| # c is non-nullable b
+for 0..10, 2 do |i|
+    echo i
+end
+
+if b != null do |c|
    result = a + c
 else
    result = 0
 end
 
-for 0..10, 2 do |i|
-    echo i
-end

@@ -5,32 +5,33 @@
 
 namespace bee::parser {
 
-template <typename T = void> class ExprVisitor {
+template <typename T> class ExprVisitor {
 public:
   virtual ~ExprVisitor() = default;
 
-  virtual T visit(const Expr &expr) {
+  virtual T visitExpr(const Expr &expr) {
     switch (expr.kind()) {
     case ExprKind::Literal:
-      return visitLiteralExpr(expr);
+      return visitLiteralExpr(static_cast<const LiteralExpr &>(expr));
     case ExprKind::Identifier:
-      return visitIdentifierExpr(expr);
+      return visitIdentifierExpr(static_cast<const IdentifierExpr &>(expr));
     case ExprKind::Range:
-      return visitRangeExpr(expr);
+      return visitRangeExpr(static_cast<const RangeExpr &>(expr));
     case ExprKind::Assignment:
-      return visitAssignmentExpr(expr);
+      return visitAssignmentExpr(static_cast<const AssignmentExpr &>(expr));
     case ExprKind::Binary:
-      return visitBinaryExpr(expr);
+      return visitBinaryExpr(static_cast<const BinaryExpr &>(expr));
     case ExprKind::Unary:
-      return visitUnaryExpr(expr);
+      return visitUnaryExpr(static_cast<const UnaryExpr &>(expr));
     case ExprKind::Parenthesized:
-      return visitParenthesizedExpr(expr);
+      return visitParenthesizedExpr(
+          static_cast<const ParenthesizedExpr &>(expr));
     case ExprKind::When:
-      return visitWhenExpr(expr);
+      return visitWhenExpr(static_cast<const WhenExpr &>(expr));
     case ExprKind::Call:
-      return visitCallExpr(expr);
+      return visitCallExpr(static_cast<const CallExpr &>(expr));
     case ExprKind::Invalid:
-      return visitInvalidExpr(expr);
+      return visitInvalidExpr(static_cast<const InvalidExpr &>(expr));
     }
   }
 
@@ -46,32 +47,34 @@ public:
   virtual T visitInvalidExpr(const InvalidExpr &expr) = 0;
 };
 
-template <typename T = void> class StmtVisitor {
+template <typename T> class StmtVisitor {
 public:
   virtual ~StmtVisitor() = default;
 
-  virtual T visit(const Stmt &stmt) {
+  virtual T visitStmt(const Stmt &stmt) {
     switch (stmt.kind()) {
     case StmtKind::VariableDeclaration:
-      return visitVariableDeclarationStmt(stmt);
+      return visitVariableDeclarationStmt(
+          static_cast<const VariableDeclarationStmt &>(stmt));
     case StmtKind::FunctionDeclaration:
-      return visitFunctionDeclarationStmt(stmt);
+      return visitFunctionDeclarationStmt(
+          static_cast<const FunctionDeclarationStmt &>(stmt));
     case StmtKind::Return:
-      return visitReturnStmt(stmt);
+      return visitReturnStmt(static_cast<const ReturnStmt &>(stmt));
     case StmtKind::Expr:
-      return visitExprStmt(stmt);
+      return visitExprStmt(static_cast<const ExprStmt &>(stmt));
     case StmtKind::Echo:
-      return visitEchoStmt(stmt);
+      return visitEchoStmt(static_cast<const EchoStmt &>(stmt));
     case StmtKind::If:
-      return visitIfStmt(stmt);
+      return visitIfStmt(static_cast<const IfStmt &>(stmt));
     case StmtKind::Block:
-      return visitBlockStmt(stmt);
+      return visitBlockStmt(static_cast<const BlockStmt &>(stmt));
     case StmtKind::While:
-      return visitWhileStmt(stmt);
+      return visitWhileStmt(static_cast<const WhileStmt &>(stmt));
     case StmtKind::For:
-      return visitForStmt(stmt);
+      return visitForStmt(static_cast<const ForStmt &>(stmt));
     case StmtKind::Invalid:
-      return visitInvalidStmt(stmt);
+      return visitInvalidStmt(static_cast<const InvalidStmt &>(stmt));
     }
   }
 

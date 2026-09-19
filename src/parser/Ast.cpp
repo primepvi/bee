@@ -1,4 +1,4 @@
-#include "bee/parser/Ast.hpp"
+#include "bee/parser/AstVisitors.hpp"
 #include "bee/Source.hpp"
 #include "bee/lexer/Token.hpp"
 #include <unistd.h>
@@ -49,7 +49,7 @@ BinaryExpr::BinaryExpr(std::unique_ptr<Expr> left, bee::lexer::Token op,
       .line = leftSpan.line,
       .col = leftSpan.col,
       .start = leftSpan.start,
-      .end = right->span().end,
+      .end = m_right->span().end,
   };
 }
 
@@ -129,7 +129,7 @@ VariableDeclarationStmt::VariableDeclarationStmt(
       .line = keywordSpan.line,
       .col = keywordSpan.col,
       .start = keywordSpan.start,
-      .end = value->span().end,
+      .end = m_value->span().end,
   };
 }
 
@@ -186,7 +186,7 @@ IfStmt::IfStmt(bee::lexer::Token keyword, std::unique_ptr<Expr> condition,
       m_consequent(std::move(consequent)), m_alternate(std::move(alternate)) {
 
   bee::SourceSpan keywordSpan = keyword.span();
-  bee::SourceSpan endSpan = !alternate ? consequent->span() : alternate->span();
+  bee::SourceSpan endSpan = !m_alternate ? m_consequent->span() : m_alternate->span();
 
   m_span = {
       .line = keywordSpan.line,

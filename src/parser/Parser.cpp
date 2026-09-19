@@ -2,6 +2,7 @@
 #include "bee/Source.hpp"
 #include "bee/lexer/Token.hpp"
 #include "bee/parser/Ast.hpp"
+#include <iostream>
 #include <memory>
 #include <optional>
 #include <span>
@@ -11,6 +12,10 @@ namespace bee::parser {
 using bee::lexer::Token;
 using bee::lexer::TokenKind;
 
+Parser::Parser(const bee::Source &source, bee::DiagnosticBag &bag,
+               const std::vector<bee::lexer::Token> &tokens)
+    : m_source(source), m_bag(bag), m_tokens(tokens) {}
+
 Program Parser::parse() {
   Program program;
   while (hasMoreTokens()) {
@@ -18,7 +23,7 @@ Program Parser::parse() {
   }
 
   return std::move(program);
-}  
+}
 
 std::unique_ptr<Expr> Parser::parseExpr() { return parseBinaryExpr(0); }
 std::unique_ptr<Expr> Parser::parseLiteralExpr() {
@@ -105,14 +110,12 @@ std::unique_ptr<Expr> Parser::parsePrimaryExpr() {
     return parseParenthesizedExpr();
 
   case TokenKind::Identifier: {
-    if (m_cursor + 2 < m_tokens.size()) {
-      if (lookahead().kind() == TokenKind::EqualSym)
-        return parseAssignmentExpr();
-      else if (lookahead().kind() == TokenKind::OpenParenSym)
-        return parseCallExpr();
-    }
-
-    return parseIdentifierExpr();
+    if (lookahead().kind() == TokenKind::EqualSym)
+      return parseAssignmentExpr();
+    else if (lookahead().kind() == TokenKind::OpenParenSym)
+      return parseCallExpr();
+    else
+      return parseIdentifierExpr();
   }
 
   case TokenKind::WhenKw:
@@ -134,11 +137,13 @@ std::unique_ptr<Expr> Parser::parsePrimaryExpr() {
 std::unique_ptr<Expr> Parser::parseBinaryExpr(std::size_t precedence) {
   std::size_t unaryPrecedence =
       bee::lexer::getUnaryOperatorPriority(peek().kind());
+
   std::unique_ptr<Expr> expr = nullptr;
 
   if (unaryPrecedence != 0 && unaryPrecedence >= precedence) {
     Token op = eat();
     std::unique_ptr<Expr> operand = parseBinaryExpr(unaryPrecedence);
+
     UnaryExpr unaryExpr(op, std::move(operand));
     expr = std::make_unique<UnaryExpr>(std::move(unaryExpr));
   } else {
@@ -148,14 +153,14 @@ std::unique_ptr<Expr> Parser::parseBinaryExpr(std::size_t precedence) {
   while (true) {
     std::size_t binaryOpPrecedence =
         bee::lexer::getBinaryOperatorPriority(peek().kind());
-    if (binaryOpPrecedence != 0 && binaryOpPrecedence <= precedence)
+
+    if (binaryOpPrecedence == 0 || binaryOpPrecedence <= precedence)
       break;
 
     Token op = eat();
     std::unique_ptr<Expr> right = parseBinaryExpr(binaryOpPrecedence);
-    std::unique_ptr<Expr> left = std::move(expr);
 
-    BinaryExpr binaryExpr(std::move(left), op, std::move(right));
+    BinaryExpr binaryExpr(std::move(expr), op, std::move(right));
     expr = std::make_unique<BinaryExpr>(std::move(binaryExpr));
   }
 
@@ -164,7 +169,7 @@ std::unique_ptr<Expr> Parser::parseBinaryExpr(std::size_t precedence) {
 
 TypeAnnotation Parser::parseTypeAnnotation() {
   Token colon = eat();
-  Token identifier = expectToken(TokenKind::ColonSym, "type name");
+  Token identifier = expectToken(TokenKind::Identifier, "type name");
 
   bool nullable = false;
   if (peek().kind() == TokenKind::QuestionSym) {
@@ -190,7 +195,7 @@ TypeAnnotation Parser::parseTypeAnnotation() {
 
 std::unique_ptr<Stmt> Parser::parseStmt() {
   std::unique_ptr<Stmt> stmt = parseNextStmt();
-  
+
   if (m_panic) {
     Token invalid = peek();
     synchronize();
@@ -221,7 +226,7 @@ std::unique_ptr<Stmt> Parser::parseNextStmt() {
     return parseReturnStmt();
   default:
     return parseExprStmt();
-  }    
+  }
 }
 
 std::unique_ptr<Stmt> Parser::parseVariableDeclarationStmt() {
@@ -439,13 +444,17 @@ std::unique_ptr<Stmt> Parser::parseForStmt() {
   return std::make_unique<ForStmt>(std::move(forStmt));
 }
 
-bee::lexer::Token Parser::peek() const { return m_tokens.at(m_cursor); }
+bee::lexer::Token Parser::peek() const {
+  return m_cursor < m_tokens.size() ? m_tokens.at(m_cursor)
+                                    : m_tokens.at(m_tokens.size() - 1);
+}
 bee::lexer::Token Parser::lookahead() const {
-  return m_tokens.at(m_cursor + 1);
+  return m_cursor + 1 < m_tokens.size() ? m_tokens.at(m_cursor + 1)
+                                        : m_tokens.at(m_tokens.size() - 1);
 }
 
 bee::lexer::Token Parser::eat() {
-  bee::lexer::Token token = m_tokens.at(m_cursor);
+  bee::lexer::Token token = peek();
   m_cursor += 1;
   return token;
 }
@@ -467,31 +476,46 @@ void Parser::synchronize() {
       m_panic = false;
       return;
     default:
-      continue;
+      eat();
     }
-
-    eat();
   }
 
   m_panic = false;
-}  
+}
+
+Token Parser::expectToken(TokenKind kind, std::string name) {
+  if (peek().kind() == kind) {
+    return eat();
+  }
+
+  if (!m_panic) {
+    // TODO: add unexpected token diagnostic.
+    m_panic = true;
+  }
+
+  SourceSpan span = peek().span();
+  span.col -= 1;
+  span.start -= 1;
+  span.end -= 1;
+
+  return Token(TokenKind::Invalid, "invalid", span);
+}
 
 bool Parser::hasMoreTokens() const {
-  return m_tokens.size() > m_cursor &&
-         peek().kind() != bee::lexer::TokenKind::EndOfFile;
+  return m_tokens.size() > m_cursor && peek().kind() != TokenKind::EndOfFile;
 }
 
 bool Parser::canStartExpr() const {
   switch (peek().kind()) {
-  case bee::lexer::TokenKind::NullKw:
-  case bee::lexer::TokenKind::TrueKw:
-  case bee::lexer::TokenKind::FalseKw:
-  case bee::lexer::TokenKind::NumberLit:
-  case bee::lexer::TokenKind::StringLit:
-  case bee::lexer::TokenKind::OpenParenSym:
-  case bee::lexer::TokenKind::CloseParenSym:
-  case bee::lexer::TokenKind::Identifier:
-  case bee::lexer::TokenKind::WhenKw:
+  case TokenKind::NullKw:
+  case TokenKind::TrueKw:
+  case TokenKind::FalseKw:
+  case TokenKind::NumberLit:
+  case TokenKind::StringLit:
+  case TokenKind::OpenParenSym:
+  case TokenKind::CloseParenSym:
+  case TokenKind::Identifier:
+  case TokenKind::WhenKw:
     return true;
   default:
     return false;
