@@ -210,10 +210,10 @@ WhileStmt::WhileStmt(bee::lexer::Token keyword, std::unique_ptr<Expr> condition,
   };
 }
 
-ForStmt::ForStmt(bee::lexer::Token keyword, std::unique_ptr<Expr> range,
-                 std::unique_ptr<Expr> increment, std::unique_ptr<Stmt> body)
-    : m_keyword(keyword), m_range(std::move(range)),
-      m_increment(std::move(increment)), m_body(std::move(body)) {
+ForStmt::ForStmt(bee::lexer::Token keyword, std::unique_ptr<Expr> iterator,
+                 std::unique_ptr<Expr> step, std::unique_ptr<Stmt> body)
+    : m_keyword(keyword), m_iterator(std::move(iterator)),
+      m_step(std::move(step)), m_body(std::move(body)) {
   bee::SourceSpan keywordSpan = keyword.span();
 
   m_span = {

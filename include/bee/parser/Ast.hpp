@@ -1,6 +1,7 @@
 #ifndef BEE_AST_HPP
 #define BEE_AST_HPP
 
+#include <algorithm>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -36,6 +37,7 @@ public:
 
   inline ExprKind kind() const override { return ExprKind::Literal; }
   inline bee::SourceSpan span() const override { return m_span; }
+  inline const bee::lexer::Token &value() const { return m_value; }
 
 private:
   bee::lexer::Token m_value;
@@ -48,6 +50,7 @@ public:
 
   inline ExprKind kind() const override { return ExprKind::Identifier; }
   inline bee::SourceSpan span() const override { return m_span; }
+  inline const bee::lexer::Token &identifier() const { return m_identifier; }
 
 private:
   bee::lexer::Token m_identifier;
@@ -61,6 +64,8 @@ public:
 
   inline ExprKind kind() const override { return ExprKind::Range; }
   inline bee::SourceSpan span() const override { return m_span; }
+  inline const std::unique_ptr<Expr> &start() const { return m_start; }
+  inline const std::unique_ptr<Expr> &end() const { return m_end; }
 
 private:
   std::unique_ptr<Expr> m_start, m_end;
@@ -75,6 +80,8 @@ public:
 
   inline ExprKind kind() const override { return ExprKind::Assignment; }
   inline bee::SourceSpan span() const override { return m_span; }
+  inline const bee::lexer::Token &identifier() const { return m_identifier; }
+  inline const std::unique_ptr<Expr> &value() const { return m_value; }
 
 private:
   bee::lexer::Token m_identifier, m_equal;
@@ -89,6 +96,9 @@ public:
 
   inline ExprKind kind() const override { return ExprKind::Binary; }
   inline bee::SourceSpan span() const override { return m_span; }
+  inline const bee::lexer::Token &op() const { return m_op; }
+  inline const std::unique_ptr<Expr> &left() const { return m_left; }
+  inline const std::unique_ptr<Expr> &right() const { return m_right; }
 
 private:
   std::unique_ptr<Expr> m_left, m_right;
@@ -102,6 +112,8 @@ public:
 
   inline ExprKind kind() const override { return ExprKind::Unary; }
   inline bee::SourceSpan span() const override { return m_span; }
+  inline const bee::lexer::Token &op() const { return m_op; }
+  inline const std::unique_ptr<Expr> &operand() const { return m_operand; }
 
 private:
   bee::lexer::Token m_op;
@@ -116,6 +128,7 @@ public:
 
   inline ExprKind kind() const override { return ExprKind::Parenthesized; }
   inline bee::SourceSpan span() const override { return m_span; }
+  inline const std::unique_ptr<Expr> &expr() const { return m_expr; }
 
 private:
   bee::lexer::Token m_openParen, m_closeParen;
@@ -131,6 +144,11 @@ public:
 
   inline ExprKind kind() const override { return ExprKind::When; }
   inline bee::SourceSpan span() const override { return m_span; }
+  inline const std::unique_ptr<Expr> &condition() const { return m_condition; }
+  inline const std::unique_ptr<Expr> &consequent() const {
+    return m_consequent;
+  }
+  inline const std::unique_ptr<Expr> &alternate() const { return m_alternate; }
 
 private:
   bee::lexer::Token m_when, m_then, m_otherwise;
@@ -146,6 +164,10 @@ public:
 
   inline ExprKind kind() const override { return ExprKind::Call; }
   inline bee::SourceSpan span() const override { return m_span; }
+  inline const bee::lexer::Token &identifier() const { return m_identifier; }
+  inline const std::vector<std::unique_ptr<Expr>> &arguments() const {
+    return m_arguments;
+  }
 
 private:
   bee::lexer::Token m_identifier, m_openParen, m_closeParen;
@@ -159,6 +181,7 @@ public:
 
   inline ExprKind kind() const override { return ExprKind::Invalid; }
   inline bee::SourceSpan span() const override { return m_span; }
+  inline const bee::lexer::Token &invalid() const { return m_invalid; }
 
 private:
   bee::lexer::Token m_invalid;
@@ -205,6 +228,11 @@ public:
   }
 
   inline bee::SourceSpan span() const override { return m_span; }
+  inline const bee::lexer::Token &keyword() const { return m_keyword; }
+  inline const bee::lexer::Token &identifier() const { return m_identifier; }
+  inline const std::optional<TypeAnnotation> &typeAnnotation() const {
+    return m_typeAnnotation;
+  }
 
 private:
   bee::lexer::Token m_keyword, m_identifier, m_assignment;
@@ -216,7 +244,7 @@ private:
 struct FunctionDeclarationParam {
   bee::lexer::Token identifier;
   TypeAnnotation typeAnnotation;
-  bee::SourceSpan m_span;
+  bee::SourceSpan span;
 };
 
 class FunctionDeclarationStmt : public Stmt {
@@ -232,6 +260,12 @@ public:
   }
 
   inline bee::SourceSpan span() const override { return m_span; }
+  inline const bee::lexer::Token &identifier() const { return m_identifier; }
+  inline const std::vector<FunctionDeclarationParam> &params() const {
+    return m_params;
+  }
+
+  inline const std::unique_ptr<Stmt> &body() const { return m_body; }
 
 private:
   bee::lexer::Token m_keyword, m_identifier;
@@ -247,6 +281,7 @@ public:
 
   inline StmtKind kind() const override { return StmtKind::Return; }
   inline bee::SourceSpan span() const override { return m_span; }
+  inline const std::unique_ptr<Expr> &expr() const { return m_expr; }
 
 private:
   bee::lexer::Token m_keyword;
@@ -260,6 +295,7 @@ public:
 
   inline StmtKind kind() const override { return StmtKind::Expr; }
   inline bee::SourceSpan span() const override { return m_span; }
+  inline const std::unique_ptr<Expr> &expr() const { return m_expr; }
 
 private:
   std::unique_ptr<Expr> m_expr;
@@ -272,6 +308,7 @@ public:
 
   inline StmtKind kind() const override { return StmtKind::Echo; }
   inline bee::SourceSpan span() const override { return m_span; }
+  inline const std::unique_ptr<Expr> &message() const { return m_message; }
 
 private:
   bee::lexer::Token m_keyword;
@@ -286,6 +323,11 @@ public:
 
   inline StmtKind kind() const override { return StmtKind::If; }
   inline bee::SourceSpan span() const override { return m_span; }
+  inline const std::unique_ptr<Expr> &condition() const { return m_condition; }
+  inline const std::unique_ptr<Stmt> &consequent() const {
+    return m_consequent;
+  }
+  inline const std::unique_ptr<Stmt> &alternate() const { return m_alternate; }
 
 private:
   bee::lexer::Token m_keyword;
@@ -301,6 +343,8 @@ public:
 
   inline StmtKind kind() const override { return StmtKind::While; }
   inline bee::SourceSpan span() const override { return m_span; }
+  inline const std::unique_ptr<Expr> &condition() const { return m_condition; }
+  inline const std::unique_ptr<Stmt> &body() const { return m_body; }
 
 private:
   bee::lexer::Token m_keyword;
@@ -311,15 +355,18 @@ private:
 
 class ForStmt : public Stmt {
 public:
-  ForStmt(bee::lexer::Token keyword, std::unique_ptr<Expr> range,
-          std::unique_ptr<Expr> increment, std::unique_ptr<Stmt> body);
+  ForStmt(bee::lexer::Token keyword, std::unique_ptr<Expr> iterator,
+          std::unique_ptr<Expr> step, std::unique_ptr<Stmt> body);
 
   inline StmtKind kind() const override { return StmtKind::For; }
   inline bee::SourceSpan span() const override { return m_span; }
+  inline const std::unique_ptr<Expr> &iterator() const { return m_iterator; }
+  inline const std::unique_ptr<Expr> &step() const { return m_step; }
+  inline const std::unique_ptr<Stmt> &body() const { return m_body; }
 
 private:
   bee::lexer::Token m_keyword;
-  std::unique_ptr<Expr> m_range, m_increment;
+  std::unique_ptr<Expr> m_iterator, m_step;
   std::unique_ptr<Stmt> m_body;
   bee::SourceSpan m_span;
 };
@@ -327,7 +374,7 @@ private:
 struct BlockCaptureAnnotation {
   bee::lexer::Token openPipe;
   bee::lexer::Token closePipe;
-  std::vector<bee::lexer::Token> identifiers;
+  std::vector<bee::lexer::Token> captures;
 };
 
 class BlockStmt : public Stmt {
@@ -339,6 +386,14 @@ public:
 
   inline StmtKind kind() const override { return StmtKind::Block; }
   inline bee::SourceSpan span() const override { return m_span; }
+
+  inline const std::optional<BlockCaptureAnnotation> &captureAnnotation() const {
+    return m_captureAnnotation;
+  }
+
+  inline const std::vector<std::unique_ptr<Stmt>> &stmts() const {
+    return m_stmts;
+  }
 
 private:
   bee::lexer::Token m_openKeyword, m_closeKeyword;
@@ -353,7 +408,8 @@ public:
 
   inline StmtKind kind() const override { return StmtKind::Invalid; }
   inline bee::SourceSpan span() const override { return m_span; }
-
+  inline const bee::lexer::Token &invalid() const { return m_invalid; }
+  
 private:
   bee::lexer::Token m_invalid;
   bee::SourceSpan m_span;
