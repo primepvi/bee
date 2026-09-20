@@ -12,6 +12,9 @@ constexpr std::array diagnosticsMessageEntries =
         {DiagnosticCode::UnexpectedSymbol,
          "Unexpected symbol has received: {0}."},
         {DiagnosticCode::UnterminatedString, "Unterminated string has found."},
+        {DiagnosticCode::ExpectedToken, "Expected '{0}', but received '{1}'."},
+        {DiagnosticCode::UnterminatedBlock, "Unterminated block has found."},
+	  {DiagnosticCode::InvalidExpression, "Invalid expression has found."},
     });
 
 std::string_view getDiagnosticLevelName(DiagnosticLevel level) {

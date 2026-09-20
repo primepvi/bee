@@ -16,10 +16,13 @@ std::string_view getDiagnosticLevelName(DiagnosticLevel level);
 enum class DiagnosticCode {
   UnexpectedSymbol,
   UnterminatedString,
+  ExpectedToken,
+  UnterminatedBlock,
+  InvalidExpression,
 };
 
 struct Diagnostic {
-  const Source& source;
+  const Source &source;
   std::string message;
   DiagnosticLevel level;
   DiagnosticCode code;
@@ -33,9 +36,10 @@ struct DiagnosticEntry {
 
 class DiagnosticBag {
 public:
-  DiagnosticBag(const Source& source);
+  DiagnosticBag(const Source &source);
 
-  void report(DiagnosticLevel level, DiagnosticCode code, SourceSpan span, std::format_args args);
+  void report(DiagnosticLevel level, DiagnosticCode code, SourceSpan span,
+              std::format_args args);
   void write(std::ostream &output) const;
 
 private:
@@ -43,6 +47,6 @@ private:
   const Source &m_source;
 };
 
-} // namespace bee::diagnostics
+} // namespace bee
 
 #endif // BEE_DIAGNOSTICS_HPP

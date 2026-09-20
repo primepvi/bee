@@ -1,7 +1,9 @@
 #include "bee/parser/Parser.hpp"
+#include "bee/Diagnostics.hpp"
 #include "bee/Source.hpp"
 #include "bee/lexer/Token.hpp"
 #include "bee/parser/Ast.hpp"
+#include <format>
 #include <memory>
 #include <optional>
 #include <span>
@@ -113,7 +115,7 @@ std::unique_ptr<Expr> Parser::parsePrimaryExpr() {
 
   default: {
     if (!m_panic) {
-      // TODO: add invalid expr parsing diagnostic.
+      m_bag.report(bee::DiagnosticLevel::Error, bee::DiagnosticCode::InvalidExpression, peek().span(), std::make_format_args());
       m_panic = true;
     }
 
@@ -333,7 +335,7 @@ std::unique_ptr<Stmt> Parser::parseIfStmt() {
 }
 
 std::unique_ptr<Stmt> Parser::parseBlockStmt(std::span<TokenKind> endKinds) {
-  Token openKeyword = eat();
+  Token openKeyword = expectToken(TokenKind::DoKw, "do");
 
   std::optional<BlockCaptureAnnotation> captureAnnotation;
   if (peek().kind() == TokenKind::PipeSym) {
@@ -376,8 +378,8 @@ std::unique_ptr<Stmt> Parser::parseBlockStmt(std::span<TokenKind> endKinds) {
   }
 
   if (!hasMoreTokens()) {
+    m_bag.report(bee::DiagnosticLevel::Error, bee::DiagnosticCode::UnterminatedBlock, openKeyword.span(), std::make_format_args());
     m_panic = true;
-    // TODO: add unterminated block diagnostic.
   }
 
   Token closeKeyword = peek();
@@ -474,7 +476,8 @@ Token Parser::expectToken(TokenKind kind, std::string name) {
   }
 
   if (!m_panic) {
-    // TODO: add unexpected token diagnostic.
+    std::string_view lexeme = peek().lexeme();
+    m_bag.report(bee::DiagnosticLevel::Error, bee::DiagnosticCode::ExpectedToken, peek().span(), std::make_format_args(name, lexeme));
     m_panic = true;
   }
 

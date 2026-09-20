@@ -1,8 +1,8 @@
 const a = 10
-const b: Int? = null
+const b: int? = null
 
-fn main(): void
-   let message: String = "Hello, World!"
+fn main(): void do
+   let message: string = "Hello, World!"
    echo message   
 end
 
@@ -10,13 +10,6 @@ fn sum(a: int, b: int): int -> a + b
 fn nothing(): void do end
 
 for 0..10 do |i|
-    echo i
-end
-
-while true -> echo nothing()
-
-if a == b do
-else if b == -1 do
-else do
+    echo sum(i, i + 1)
 end
 
