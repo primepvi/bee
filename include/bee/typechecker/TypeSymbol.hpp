@@ -2,7 +2,6 @@
 #define BEE_TYPE_SYMBOL_HPP
 
 #include <string_view>
-
 #include "bee/typechecker/Type.hpp"
 
 namespace bee::typechecker {
