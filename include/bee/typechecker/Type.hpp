@@ -1,22 +1,29 @@
 #ifndef BEE_TYPE_HPP
 #define BEE_TYPE_HPP
 
-#include "bee/lexer/Token.hpp"
-#include "bee/parser/Ast.hpp"
 #include <string_view>
 #include <variant>
+
+#include "bee/lexer/Token.hpp"
+#include "bee/parser/Ast.hpp"
 
 namespace bee::typechecker {
 
 enum class TypeKind {
   Int,
   UInt,
-  Range,
+  Bool,
   String,
+  Range,
   Function,
   Void,
   Null,
   Invalid,
+};
+
+struct TypeEntry {
+  std::string_view lexeme;
+  TypeKind kind;
 };
 
 class Type;
@@ -30,11 +37,12 @@ struct RangeInfo {
   std::unique_ptr<Type> type;
 };
 
-using TypeData = std::variant<std::monostate, RangeInfo, FunctionInfo>;
+using TypeInfo = std::variant<std::monostate, RangeInfo, FunctionInfo>;
 
 class Type {
 public:
   Type(TypeKind kind, bool nullable);
+  Type(TypeKind kind, bool nullable, TypeInfo info);
   static Type fromLexeme(std::string_view lexeme);
   static Type fromAnnotation(bee::parser::TypeAnnotation annotation);
 
@@ -48,17 +56,23 @@ public:
                                     const Type &operand);
 
   std::string toString() const;
-  const TypeData &data() const;
-
-  bool isEmpty() const;
-  bool isInvalid() const;
-  bool isEqual(const Type &other) const;
   bool isAssignableTo(const Type &other) const;
+  
+  inline TypeKind kind() const { return m_kind; }
+  inline const TypeInfo &info() const { return m_info; }
+  inline bool nullable() const { return m_nullable; }
+  
+  inline bool isEmpty() const { return m_kind == TypeKind::Void; }
+  inline bool isInvalid() const { return m_kind == TypeKind::Invalid; }
 
+  inline bool isEqual(const Type &other) const {
+    return this->toString() == other.toString();
+  }
+  
 private:
   TypeKind m_kind;
   bool m_nullable;
-  TypeData m_data;
+  TypeInfo m_info;
 };
 
 } // namespace bee::typechecker

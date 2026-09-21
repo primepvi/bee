@@ -22,7 +22,8 @@ public:
 
 class VariableSymbol : public TypeSymbol {
 public:
-  VariableSymbol(std::string_view name, bool constant, Type type);
+  VariableSymbol(std::string_view name, bool constant, Type type)
+    : m_name(name), m_constant(constant), m_type(std::move(type)) {}
 
   inline std::string_view name() const override { return m_name; }
   inline TypeSymbolKind kind() const override {
@@ -40,7 +41,8 @@ private:
 
 class FunctionSymbol : public TypeSymbol {
 public:
-  FunctionSymbol(std::string_view name, std::size_t arity, Type type);
+  FunctionSymbol(std::string_view name, std::size_t arity, Type type)
+    : m_name(name), m_arity(arity), m_type(std::move(type)) {}
 
   inline std::string_view name() const override { return m_name; }
   inline TypeSymbolKind kind() const override {
