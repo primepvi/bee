@@ -9,12 +9,42 @@ namespace bee {
 
 constexpr std::array diagnosticsMessageEntries =
     std::to_array<DiagnosticEntry>({
+        // Lexer
         {DiagnosticCode::UnexpectedSymbol,
          "Unexpected symbol has received: {0}."},
         {DiagnosticCode::UnterminatedString, "Unterminated string has found."},
+        // Parser
         {DiagnosticCode::ExpectedToken, "Expected '{0}', but received '{1}'."},
         {DiagnosticCode::UnterminatedBlock, "Unterminated block has found."},
-	  {DiagnosticCode::InvalidExpression, "Invalid expression has found."},
+        {DiagnosticCode::InvalidExpression, "Invalid expression has found."},
+
+        // TypeChecker
+        {DiagnosticCode::IdentifierAlreadyDeclared,
+         "Identifier '{0}' already declared."},
+        {DiagnosticCode::TypeMismatch,
+         "Expected type '{0}', but received type '{0}'"},
+        {DiagnosticCode::InvalidTypeAnnotation, "Invalid type annotation."},
+        {DiagnosticCode::InvalidVoidUsage, "Void type cannot be used here."},
+        {DiagnosticCode::InvalidReturnUsage,
+         "Attempt to return a value outside a function scope."},
+        {DiagnosticCode::InvalidFunctionDeclaration,
+         "Attempt to declare a function in non-global scope."},
+        {DiagnosticCode::InvalidFunctionCallArity,
+         "Function '{0}' expects {1} arguments, but has received only {2} "
+         "arguments."},
+        {DiagnosticCode::VoidControlPaths,
+         "Non-void function has void control paths."},
+        {DiagnosticCode::UndefinedIdentifier,
+         "Identifier '{0}' is not defined."},
+        {DiagnosticCode::InvalidAssignment,
+         "Attempt to assign a value to a '{0}'."},
+        {DiagnosticCode::UnsupporetedBinaryOperation,
+         "The binary operator '{0}' not supports a left type '{1}' and a right "
+         "type '{2}'."},
+        {DiagnosticCode::UnsupportedUnaryOperation,
+         "The unary operator '{0}' not supports an operand of type '{1}'."},
+        {DiagnosticCode::NonFunctionCall,
+         "Attempt to call a non-function identifier."},        
     });
 
 std::string_view getDiagnosticLevelName(DiagnosticLevel level) {

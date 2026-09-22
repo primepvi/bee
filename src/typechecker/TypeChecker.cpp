@@ -1,9 +1,13 @@
 #include "bee/typechecker/TypeChecker.hpp"
+#include "bee/Diagnostics.hpp"
 #include "bee/lexer/Token.hpp"
 #include "bee/parser/Ast.hpp"
+#include <format>
 
 namespace bee::typechecker {
 
+using bee::DiagnosticCode;
+using bee::DiagnosticLevel;
 using bee::lexer::TokenKind;
 
 TypeChecker::TypeChecker(const bee::parser::Program &program,
@@ -21,7 +25,9 @@ TypeFlow TypeChecker::visitVariableDeclarationStmt(
 
   std::string_view variableName = stmt.identifier().lexeme();
   if (m_env->scopeHasSymbol(variableName)) {
-    // TODO: add identifier already declared error diagnostic.
+    m_bag.report(DiagnosticLevel::Error,
+                 DiagnosticCode::IdentifierAlreadyDeclared,
+                 stmt.identifier().span(), std::make_format_args(variableName));
     return TypeFlow{.canContinue = true};
   }
 
@@ -34,10 +40,21 @@ TypeFlow TypeChecker::visitVariableDeclarationStmt(
     Type annotationType = Type::fromAnnotation(annotation);
 
     if (annotationType.isEmpty() || annotationType.isInvalid()) {
-      // TODO: add invalid type annotation error diagnostic.
+
+      m_bag.report(DiagnosticLevel::Error,
+                   DiagnosticCode::InvalidTypeAnnotation, annotation.span,
+                   std::make_format_args());
       variableType = std::make_unique<Type>(Type::invalid());
+
     } else if (!valueType->isAssignableTo(annotationType)) {
-      // TODO: add type mismatch error diagnostic.
+      std::string annotationTypeString = annotationType.toString();
+      std::string valueTypeString = valueType->toString();
+
+      m_bag.report(
+          DiagnosticLevel::Error, DiagnosticCode::TypeMismatch,
+          stmt.value()->span(),
+          std::make_format_args(annotationTypeString, valueTypeString));
+
       variableType = std::make_unique<Type>(Type::invalid());
     } else {
       variableType = std::make_unique<Type>(std::move(annotationType));
@@ -47,7 +64,8 @@ TypeFlow TypeChecker::visitVariableDeclarationStmt(
   }
 
   if (variableType->isEmpty()) {
-    // TODO: add invalid void type usage.
+    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::InvalidVoidUsage,
+                 stmt.span(), std::make_format_args());
     variableType = std::make_unique<Type>(Type::invalid());
   }
 
@@ -61,12 +79,16 @@ TypeFlow TypeChecker::visitVariableDeclarationStmt(
 TypeFlow TypeChecker::visitFunctionDeclarationStmt(
     const bee::parser::FunctionDeclarationStmt &stmt) {
   if (m_env->scopeKind() != TypeScopeKind::Global) {
-    // TODO: add non-global scope function declaration error diagnostic.
+    m_bag.report(DiagnosticLevel::Error,
+                 DiagnosticCode::InvalidFunctionDeclaration, stmt.span(),
+                 std::make_format_args());
   }
 
   std::string_view functionName = stmt.identifier().lexeme();
   if (m_env->scopeHasSymbol(functionName)) {
-    // TODO: add identifier already declared error diagnostic.
+    m_bag.report(DiagnosticLevel::Error,
+                 DiagnosticCode::IdentifierAlreadyDeclared,
+                 stmt.identifier().span(), std::make_format_args(functionName));
     return TypeFlow{.canContinue = true};
   }
 
@@ -75,7 +97,9 @@ TypeFlow TypeChecker::visitFunctionDeclarationStmt(
   for (const auto &param : stmt.params()) {
     Type paramType = Type::fromAnnotation(param.typeAnnotation);
     if (paramType.isEmpty() || paramType.isInvalid()) {
-      // TODO: add invalid type annotation error diagnostic.
+      m_bag.report(DiagnosticLevel::Error,
+                   DiagnosticCode::InvalidTypeAnnotation,
+                   param.typeAnnotation.span, std::make_format_args());
     }
 
     VariableSymbol paramSymbol(param.identifier.lexeme(), true,
@@ -85,7 +109,8 @@ TypeFlow TypeChecker::visitFunctionDeclarationStmt(
 
   Type returnType = Type::fromAnnotation(stmt.typeAnnotation());
   if (returnType.isInvalid()) {
-    // TODO: add invalid type annotation error diagnostic.
+    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::InvalidTypeAnnotation,
+                 stmt.typeAnnotation().span, std::make_format_args());
   }
 
   Type functionType =
@@ -106,7 +131,8 @@ TypeFlow TypeChecker::visitFunctionDeclarationStmt(
   m_scopeReturnType = std::move(prevScopeReturnType);
 
   if (!returnType.isEmpty() && flow.canContinue) {
-    // TODO: add void control paths diagnostic error.
+    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::VoidControlPaths,
+                 stmt.span(), std::make_format_args());
   }
 
   return TypeFlow{.canContinue = true};
@@ -120,7 +146,8 @@ TypeFlow TypeChecker::visitReturnStmt(const bee::parser::ReturnStmt &stmt) {
   }
 
   if (functionScope->scopeKind() != TypeScopeKind::Function) {
-    // TODO: add invalid return usage error diagnostic.
+    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::InvalidReturnUsage,
+                 stmt.span(), std::make_format_args());
     return TypeFlow{.canContinue = true};
   }
 
@@ -128,7 +155,12 @@ TypeFlow TypeChecker::visitReturnStmt(const bee::parser::ReturnStmt &stmt) {
                                          ? std::make_unique<Type>(Type::empty())
                                          : visitExpr(*stmt.expr());
   if (!returnType->isAssignableTo(m_scopeReturnType)) {
-    // TODO: add type mismatch error diagnostic.
+    std::string scopeReturnTypeString = m_scopeReturnType.toString();
+    std::string returnTypeString = returnType->toString();
+
+    m_bag.report(
+        DiagnosticLevel::Error, DiagnosticCode::TypeMismatch, stmt.span(),
+        std::make_format_args(scopeReturnTypeString, returnTypeString));
   }
 
   return TypeFlow{.canContinue = false};
@@ -142,7 +174,8 @@ TypeFlow TypeChecker::visitExprStmt(const bee::parser::ExprStmt &stmt) {
 TypeFlow TypeChecker::visitEchoStmt(const bee::parser::EchoStmt &stmt) {
   std::unique_ptr<Type> messageType = visitExpr(*stmt.message());
   if (messageType->isEmpty()) {
-    // TODO: add invalid void usage error diagnostic.
+    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::InvalidVoidUsage,
+                 stmt.message()->span(), std::make_format_args());
   }
 
   return TypeFlow{.canContinue = true};
@@ -151,7 +184,11 @@ TypeFlow TypeChecker::visitEchoStmt(const bee::parser::EchoStmt &stmt) {
 TypeFlow TypeChecker::visitIfStmt(const bee::parser::IfStmt &stmt) {
   std::unique_ptr<Type> conditionType = visitExpr(*stmt.condition());
   if (conditionType->kind() != TypeKind::Bool) {
-    // TODO: add type mismatch error diagnostic.
+    std::string conditionTypeString = conditionType->toString();
+
+    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::TypeMismatch,
+                 stmt.condition()->span(),
+                 std::make_format_args("bool", conditionTypeString));
   }
 
   TypeFlow consequentFlow = visitStmt(*stmt.consequent());
@@ -183,7 +220,11 @@ TypeFlow TypeChecker::visitBlockStmt(const bee::parser::BlockStmt &stmt) {
 TypeFlow TypeChecker::visitWhileStmt(const bee::parser::WhileStmt &stmt) {
   std::unique_ptr<Type> conditionType = visitExpr(*stmt.condition());
   if (conditionType->kind() != TypeKind::Bool) {
-    // TODO: add type mismatch error diagnostic.
+    std::string conditionTypeString = conditionType->toString();
+
+    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::TypeMismatch,
+                 stmt.condition()->span(),
+                 std::make_format_args("bool", conditionTypeString));
   }
 
   TypeEnvironment loopScope(TypeScopeKind::Block, m_env);
@@ -199,13 +240,21 @@ TypeFlow TypeChecker::visitWhileStmt(const bee::parser::WhileStmt &stmt) {
 TypeFlow TypeChecker::visitForStmt(const bee::parser::ForStmt &stmt) {
   std::unique_ptr<Type> iteratorType = visitExpr(*stmt.iterator());
   if (iteratorType->kind() != TypeKind::Range) {
-    // TODO: add type mismatch error diagnostic.
+    std::string iteratorTypeString = iteratorType->toString();
+
+    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::TypeMismatch,
+                 stmt.iterator()->span(),
+                 std::make_format_args("range<int>", iteratorTypeString));
   }
 
   if (stmt.step() != nullptr) {
     std::unique_ptr<Type> stepType = visitExpr(*stmt.step());
     if (stepType->kind() != TypeKind::Int) {
-      // TODO: add type mismatch error diagnostic.
+      std::string stepTypeString = stepType->toString();
+
+      m_bag.report(DiagnosticLevel::Error, DiagnosticCode::TypeMismatch,
+                   stmt.step()->span(),
+                   std::make_format_args("int", stepTypeString));
     }
   }
 
@@ -244,7 +293,8 @@ std::unique_ptr<Type>
 TypeChecker::visitIdentifierExpr(const bee::parser::IdentifierExpr &expr) {
   std::string_view name = expr.identifier().lexeme();
   if (!m_env->hasSymbol(name)) {
-    // TODO: add undefined identifier error diagnostic.
+    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::UndefinedIdentifier,
+                 expr.identifier().span(), std::make_format_args(name));
     return std::make_unique<Type>(Type::invalid());
   }
 
@@ -257,24 +307,32 @@ TypeChecker::visitAssignmentExpr(const bee::parser::AssignmentExpr &expr) {
   std::unique_ptr<Type> valueType = visitExpr(*expr.value());
   std::string_view name = expr.identifier().lexeme();
   if (!m_env->hasSymbol(name)) {
-    // TODO: add undefined identifier error diagnostic.
+    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::UndefinedIdentifier,
+                 expr.identifier().span(), std::make_format_args(name));
     return valueType;
   }
 
   TypeSymbol symbol = m_env->getSymbol(name);
   if (symbol.kind() != TypeSymbolKind::Variable) {
-    // TODO: add invalid assignment error diagnostic.
+    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::InvalidAssignment,
+                 expr.span(), std::make_format_args("non-variable identifier"));
     return valueType;
   }
 
   VariableSymbol &variableSymbol = static_cast<VariableSymbol &>(symbol);
   if (variableSymbol.isConst()) {
-    // TODO: add invalid assignment error diagnostic.
+    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::InvalidAssignment,
+                 expr.span(), std::make_format_args("constant variable"));
     return valueType;
   }
 
   if (!valueType->isAssignableTo(variableSymbol.type())) {
-    // TODO: add type mismatch error diagnostic.
+    std::string variableTypeString = variableSymbol.type().toString();
+    std::string valueTypeString = valueType->toString();
+
+    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::TypeMismatch,
+                 expr.value()->span(),
+                 std::make_format_args(variableTypeString, valueTypeString));
   }
 
   return valueType;
@@ -285,7 +343,13 @@ TypeChecker::visitBinaryExpr(const bee::parser::BinaryExpr &expr) {
   std::unique_ptr<Type> leftType = visitExpr(*expr.left());
   std::unique_ptr<Type> rightType = visitExpr(*expr.right());
   if (!Type::isValidBinaryOperation(*leftType, expr.op().kind(), *rightType)) {
-    // TODO: add unsuported binary operation error diagnostic.
+    std::string leftTypeString = leftType->toString();
+    std::string rightTypeString = rightType->toString();
+    std::string_view op = expr.op().lexeme();
+
+    m_bag.report(DiagnosticLevel::Error,
+                 DiagnosticCode::UnsupporetedBinaryOperation, expr.span(),
+                 std::make_format_args(op, leftTypeString, rightTypeString));
     return std::make_unique<Type>(Type::invalid());
   }
 
@@ -319,7 +383,12 @@ std::unique_ptr<Type>
 TypeChecker::visitUnaryExpr(const bee::parser::UnaryExpr &expr) {
   std::unique_ptr<Type> operandType = visitExpr(*expr.operand());
   if (!Type::isValidUnaryOperation(expr.op().kind(), *operandType)) {
-    // TODO: add unsupported unary operation error diagnostic.
+    std::string_view op = expr.op().lexeme();
+    std::string operandTypeString = operandType->toString();
+
+    m_bag.report(DiagnosticLevel::Error,
+                 DiagnosticCode::UnsupportedUnaryOperation, expr.span(),
+                 std::make_format_args(op, operandTypeString));
   }
 
   return operandType;
@@ -334,14 +403,21 @@ std::unique_ptr<Type>
 TypeChecker::visitWhenExpr(const bee::parser::WhenExpr &expr) {
   std::unique_ptr<Type> conditionType = visitExpr(*expr.condition());
   if (conditionType->kind() != TypeKind::Bool) {
-    // TODO: add type mismatch error diagnostic.
+    std::string conditionTypeString = conditionType->toString();
+
+    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::TypeMismatch,
+                 expr.condition()->span(),
+                 std::make_format_args("bool", conditionTypeString));
   }
 
   std::unique_ptr<Type> consequentType = visitExpr(*expr.consequent());
   std::unique_ptr<Type> alternateType = visitExpr(*expr.alternate());
 
   if (!alternateType->isAssignableTo(*consequentType)) {
-    // TODO: add type mismatch error diagnostic.
+    std::string consequentTypeString = consequentType->toString();
+    std::string alternateTypeString = alternateType->toString();
+
+    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::TypeMismatch, expr.span(), std::make_format_args(consequentTypeString, alternateTypeString));
   }
 
   return consequentType;
@@ -351,13 +427,13 @@ std::unique_ptr<Type>
 TypeChecker::visitCallExpr(const bee::parser::CallExpr &expr) {
   std::string_view functionName = expr.identifier().lexeme();
   if (!m_env->hasSymbol(functionName)) {
-    // TODO: add undefined identifier error diagnostic.
+    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::UndefinedIdentifier, expr.identifier().span(), std::make_format_args(functionName));
     return std::make_unique<Type>(Type::invalid());
   }
 
   TypeSymbol symbol = m_env->getSymbol(functionName);
   if (symbol.kind() != TypeSymbolKind::Function) {
-    // TODO: add non function call error diagnostic.
+    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::NonFunctionCall, expr.span(), std::make_format_args());
     return std::make_unique<Type>(Type::invalid());
   }
 
@@ -369,12 +445,15 @@ TypeChecker::visitCallExpr(const bee::parser::CallExpr &expr) {
   std::unique_ptr<Type> returnType = std::move(functionInfo.returnType);
   const std::vector<std::unique_ptr<bee::parser::Expr>> &arguments =
       expr.arguments();
-  
+
   if (functionSymbol.arity() != arguments.size()) {
-    // TODO: add invalid function arity error diagnostic.
+    std::size_t functionArity = functionSymbol.arity();
+    std::size_t argumentsSize = arguments.size();
+    
+    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::InvalidFunctionCallArity, expr.span(), std::make_format_args(functionName, functionArity, argumentsSize));
+
     return returnType;
   }
-
 
   const std::vector<Type> &paramsTypes = functionInfo.params;
   for (std::size_t i = 0; i < functionSymbol.arity(); i++) {
@@ -382,11 +461,14 @@ TypeChecker::visitCallExpr(const bee::parser::CallExpr &expr) {
     const std::unique_ptr<bee::parser::Expr> &argumentExpr = arguments[i];
     std::unique_ptr<Type> argumentType = visitExpr(*argumentExpr);
     if (!argumentType->isAssignableTo(paramType)) {
-      // TODO: add type mismatch error diagnostic.
+      std::string paramTypeString = paramType.toString();
+      std::string argumentTypeString = argumentType->toString();
+
+      m_bag.report(DiagnosticLevel::Error, DiagnosticCode::TypeMismatch, argumentExpr->span(), std::make_format_args(paramTypeString, argumentTypeString));
     }
   }
 
-  return returnType;  
+  return returnType;
 }
 
 std::unique_ptr<Type>

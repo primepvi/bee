@@ -14,11 +14,29 @@ enum class DiagnosticLevel { Error, Warning };
 std::string_view getDiagnosticLevelName(DiagnosticLevel level);
 
 enum class DiagnosticCode {
+  // Lexer
   UnexpectedSymbol,
   UnterminatedString,
+
+  // Parser
   ExpectedToken,
   UnterminatedBlock,
   InvalidExpression,
+
+  // TypeChecker
+  IdentifierAlreadyDeclared,
+  TypeMismatch,
+  InvalidTypeAnnotation,
+  InvalidVoidUsage,
+  InvalidReturnUsage,
+  InvalidFunctionDeclaration,
+  InvalidFunctionCallArity,
+  VoidControlPaths,
+  UndefinedIdentifier,
+  InvalidAssignment,
+  UnsupporetedBinaryOperation,
+  UnsupportedUnaryOperation,
+  NonFunctionCall,
 };
 
 struct Diagnostic {
