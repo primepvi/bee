@@ -15,7 +15,7 @@ enum class TypeScopeKind {
 class TypeEnvironment {
 public:
   TypeEnvironment(TypeScopeKind scopeKind,
-                  std::unique_ptr<TypeEnvironment> parent);
+                  std::shared_ptr<TypeEnvironment> parent);
 
   bool hasSymbol(std::string_view key) const;
   bool scopeHasSymbol(std::string_view key) const;
@@ -23,9 +23,14 @@ public:
   const TypeSymbol &getSymbol(std::string_view key) const;
   const TypeSymbol &scopeGetSymbol(std::string_view key) const;
 
+  void putSymbol(TypeSymbol symbol);
+
+  inline TypeScopeKind scopeKind() { return m_scopeKind; }
+  inline std::shared_ptr<TypeEnvironment> parent() { return m_parent; }
+  
 private:
   TypeScopeKind m_scopeKind;
-  std::unique_ptr<TypeEnvironment> m_parent;
+  std::shared_ptr<TypeEnvironment> m_parent;
   std::unordered_map<std::string_view, TypeSymbol> m_symbols;
 };
 

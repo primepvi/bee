@@ -1,11 +1,12 @@
 #include <stdexcept>
 #include "bee/typechecker/TypeEnvironment.hpp"
+#include "bee/typechecker/TypeSymbol.hpp"
 
 namespace bee::typechecker {
 
 TypeEnvironment::TypeEnvironment(TypeScopeKind scopeKind,
-                                 std::unique_ptr<TypeEnvironment> parent)
-    : m_scopeKind(scopeKind), m_parent(std::move(parent)) {}
+                                 std::shared_ptr<TypeEnvironment> parent)
+  : m_scopeKind(scopeKind), m_parent(std::move(parent)) {}
 
 bool TypeEnvironment::hasSymbol(std::string_view key) const {
   if (m_symbols.contains(key))
@@ -36,5 +37,9 @@ const TypeSymbol &TypeEnvironment::scopeGetSymbol(std::string_view key) const {
 
   return m_symbols.at(key);
 }
+
+void TypeEnvironment::putSymbol(TypeSymbol symbol) {
+  m_symbols.insert_or_assign(symbol.name(), std::move(symbol));
+}  
 
 } // namespace bee::typechecker
