@@ -56,6 +56,14 @@ Type Type::function(std::vector<Type> paramsTypes, Type returnType) {
   return Type(TypeKind::Function, false, std::move(info));
 }
 
+Type Type::range(Type type) {
+  RangeInfo info = {
+      .type = std::make_unique<Type>(std::move(type)),
+  };
+
+  return Type(TypeKind::Range, false, std::move(info));
+}  
+
 Type Type::invalid() { return Type(TypeKind::Invalid, false); }
 Type Type::empty() { return Type(TypeKind::Void, false); }
 

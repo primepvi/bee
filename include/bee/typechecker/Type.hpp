@@ -47,6 +47,7 @@ public:
   static Type fromAnnotation(bee::parser::TypeAnnotation annotation);
 
   static Type function(std::vector<Type> paramsTypes, Type returnType);
+  static Type range(Type type);
   static Type invalid();
   static Type empty();
 

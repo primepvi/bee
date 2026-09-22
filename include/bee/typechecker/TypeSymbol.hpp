@@ -16,7 +16,7 @@ public:
   virtual ~TypeSymbol() = default;
   virtual std::string_view name() const;
   virtual TypeSymbolKind kind() const;
-  virtual const Type &type() const;
+  virtual Type &type();
 };
 
 class VariableSymbol : public TypeSymbol {
@@ -29,7 +29,7 @@ public:
     return TypeSymbolKind::Variable;
   }
 
-  inline const Type &type() const override { return m_type; }
+  inline Type &type() override { return m_type; }
   inline bool isConst() const { return m_constant; }
 
 private:
@@ -49,7 +49,7 @@ public:
   }
 
   inline std::size_t arity() const { return m_arity; }
-  inline const Type &type() const override { return m_type; }
+  inline Type &type() override { return m_type; }
 
 private:
   std::string_view m_name;
