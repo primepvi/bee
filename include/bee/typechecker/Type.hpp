@@ -30,11 +30,11 @@ class Type;
 
 struct FunctionInfo {
   std::vector<Type> params;
-  std::unique_ptr<Type> returnType;
+  std::shared_ptr<const Type> returnType;
 };
 
 struct RangeInfo {
-  std::unique_ptr<Type> type;
+  std::shared_ptr<const Type> type;
 };
 
 using TypeInfo = std::variant<std::monostate, RangeInfo, FunctionInfo>;
@@ -57,6 +57,7 @@ public:
                                     const Type &operand);
 
   std::string toString() const;
+  
   bool isAssignableTo(const Type &other) const;
   
   inline TypeKind kind() const { return m_kind; }

@@ -15,7 +15,8 @@ struct TypeFlow {
 class TypeChecker : public bee::parser::ExprVisitor<std::unique_ptr<Type>>,
                     public bee::parser::StmtVisitor<TypeFlow> {
 public:
-  TypeChecker(const bee::parser::Program &program, bee::DiagnosticBag bag);
+  TypeChecker(const bee::parser::Program &program, bee::DiagnosticBag &bag);
+  void typecheck();
 
   TypeFlow visitVariableDeclarationStmt(
       const bee::parser::VariableDeclarationStmt &stmt) override;
@@ -51,7 +52,7 @@ public:
 
 private:
   const bee::parser::Program &m_program;
-  bee::DiagnosticBag m_bag;
+  bee::DiagnosticBag &m_bag;
   std::shared_ptr<TypeEnvironment> m_env;
   Type m_scopeReturnType;
 };

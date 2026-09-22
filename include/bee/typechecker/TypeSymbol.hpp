@@ -14,15 +14,14 @@ enum class TypeSymbolKind {
 class TypeSymbol {
 public:
   virtual ~TypeSymbol() = default;
-  virtual std::string_view name() const;
-  virtual TypeSymbolKind kind() const;
-  virtual Type &type();
+  virtual std::string_view name() const = 0;
+  virtual TypeSymbolKind kind() const = 0;
+  virtual Type &type() = 0;
 };
 
 class VariableSymbol : public TypeSymbol {
 public:
-  VariableSymbol(std::string_view name, bool constant, Type type)
-    : m_name(name), m_constant(constant), m_type(std::move(type)) {}
+  VariableSymbol(std::string_view name, bool constant, Type type);
 
   inline std::string_view name() const override { return m_name; }
   inline TypeSymbolKind kind() const override {
@@ -40,9 +39,8 @@ private:
 
 class FunctionSymbol : public TypeSymbol {
 public:
-  FunctionSymbol(std::string_view name, std::size_t arity, Type type)
-    : m_name(name), m_arity(arity), m_type(std::move(type)) {}
-
+  FunctionSymbol(std::string_view name, std::size_t arity, Type type);
+  
   inline std::string_view name() const override { return m_name; }
   inline TypeSymbolKind kind() const override {
     return TypeSymbolKind::Function;

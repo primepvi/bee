@@ -59,7 +59,8 @@ public:
   void report(DiagnosticLevel level, DiagnosticCode code, SourceSpan span,
               std::format_args args);
   void write(std::ostream &output) const;
-
+  
+  inline bool isEmpty() const { return m_diagnostics.size() == 0; }
 private:
   std::vector<Diagnostic> m_diagnostics;
   const Source &m_source;

@@ -2,6 +2,7 @@
 #define BEE_AST_VISITORS_HPP
 
 #include "bee/parser/Ast.hpp"
+#include <stdexcept>
 
 namespace bee::parser {
 
@@ -30,6 +31,8 @@ public:
       return visitCallExpr(static_cast<const CallExpr &>(expr));
     case ExprKind::Invalid:
       return visitInvalidExpr(static_cast<const InvalidExpr &>(expr));
+    default:
+      throw std::runtime_error("Unreachable (visitExpr).");
     }
   }
 
@@ -72,6 +75,8 @@ public:
       return visitForStmt(static_cast<const ForStmt &>(stmt));
     case StmtKind::Invalid:
       return visitInvalidStmt(static_cast<const InvalidStmt &>(stmt));
+    default:
+      throw std::runtime_error("Unreachable (visitStmt).");
     }
   }
 

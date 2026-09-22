@@ -2,7 +2,12 @@
 #include "bee/Diagnostics.hpp"
 #include "bee/lexer/Token.hpp"
 #include "bee/parser/Ast.hpp"
+#include "bee/typechecker/TypeEnvironment.hpp"
+#include "bee/typechecker/TypeSymbol.hpp"
+
+#include <array>
 #include <format>
+#include <memory>
 
 namespace bee::typechecker {
 
@@ -11,13 +16,19 @@ using bee::DiagnosticLevel;
 using bee::lexer::TokenKind;
 
 TypeChecker::TypeChecker(const bee::parser::Program &program,
-                         bee::DiagnosticBag bag)
+                         bee::DiagnosticBag &bag)
     : m_program(program), m_bag(bag),
       m_scopeReturnType(Type(TypeKind::Void, false)) {
 
   TypeEnvironment globalEnv(TypeScopeKind::Global, nullptr);
 
   m_env = std::make_shared<TypeEnvironment>(std::move(globalEnv));
+}
+
+void TypeChecker::typecheck() {
+  for (const auto &stmt : m_program) {
+    visitStmt(*stmt);
+  }
 }
 
 TypeFlow TypeChecker::visitVariableDeclarationStmt(
@@ -32,7 +43,7 @@ TypeFlow TypeChecker::visitVariableDeclarationStmt(
   }
 
   std::unique_ptr<Type> valueType = visitExpr(*stmt.value());
-  std::unique_ptr<Type> variableType = nullptr;
+  std::unique_ptr<Type> variableType = std::make_unique<Type>(Type::invalid());
 
   if (stmt.typeAnnotation() != std::nullopt) {
     const bee::parser::TypeAnnotation annotation =
@@ -44,8 +55,6 @@ TypeFlow TypeChecker::visitVariableDeclarationStmt(
       m_bag.report(DiagnosticLevel::Error,
                    DiagnosticCode::InvalidTypeAnnotation, annotation.span,
                    std::make_format_args());
-      variableType = std::make_unique<Type>(Type::invalid());
-
     } else if (!valueType->isAssignableTo(annotationType)) {
       std::string annotationTypeString = annotationType.toString();
       std::string valueTypeString = valueType->toString();
@@ -54,8 +63,6 @@ TypeFlow TypeChecker::visitVariableDeclarationStmt(
           DiagnosticLevel::Error, DiagnosticCode::TypeMismatch,
           stmt.value()->span(),
           std::make_format_args(annotationTypeString, valueTypeString));
-
-      variableType = std::make_unique<Type>(Type::invalid());
     } else {
       variableType = std::make_unique<Type>(std::move(annotationType));
     }
@@ -72,7 +79,7 @@ TypeFlow TypeChecker::visitVariableDeclarationStmt(
   bool isConstant = stmt.keyword().kind() == bee::lexer::TokenKind::ConstKw;
   VariableSymbol variable(variableName, isConstant, std::move(*variableType));
 
-  m_env->putSymbol(std::move(variable));
+  m_env->putSymbol(std::make_unique<VariableSymbol>(std::move(variable)));
   return TypeFlow{.canContinue = true};
 }
 
@@ -102,9 +109,11 @@ TypeFlow TypeChecker::visitFunctionDeclarationStmt(
                    param.typeAnnotation.span, std::make_format_args());
     }
 
+    paramTypes.push_back(paramType);
     VariableSymbol paramSymbol(param.identifier.lexeme(), true,
                                std::move(paramType));
-    functionEnv.putSymbol(paramSymbol);
+    functionEnv.putSymbol(
+        std::make_unique<VariableSymbol>(std::move(paramSymbol)));
   }
 
   Type returnType = Type::fromAnnotation(stmt.typeAnnotation());
@@ -113,27 +122,41 @@ TypeFlow TypeChecker::visitFunctionDeclarationStmt(
                  stmt.typeAnnotation().span, std::make_format_args());
   }
 
-  Type functionType =
-      Type::function(std::move(paramTypes), std::move(returnType));
+  Type functionType = Type::function(std::move(paramTypes), returnType);
   FunctionSymbol functionSymbol(functionName, stmt.params().size(),
                                 std::move(functionType));
-  functionEnv.putSymbol(functionSymbol);
-  m_env->putSymbol(functionSymbol);
+  functionEnv.putSymbol(std::make_unique<FunctionSymbol>(functionSymbol));
+  m_env->putSymbol(std::make_unique<FunctionSymbol>(std::move(functionSymbol)));
 
   Type prevScopeReturnType = std::move(m_scopeReturnType);
-  m_scopeReturnType = std::move(returnType);
+  m_scopeReturnType = returnType;
 
   std::shared_ptr<TypeEnvironment> prevEnv = std::move(m_env);
   m_env = std::make_shared<TypeEnvironment>(std::move(functionEnv));
 
-  TypeFlow flow = visitStmt(*stmt.body());
+  if (stmt.body()->kind() == bee::parser::StmtKind::Block) {
+    TypeFlow flow = visitStmt(*stmt.body());
+
+    if (!returnType.isEmpty() && flow.canContinue) {
+      m_bag.report(DiagnosticLevel::Error, DiagnosticCode::VoidControlPaths,
+                   stmt.span(), std::make_format_args());
+    }
+  } else {
+    auto &body = static_cast<bee::parser::ExprStmt &>(*stmt.body());
+    std::unique_ptr<Type> exprType = visitExpr(*body.expr());
+
+    if (!exprType->isAssignableTo(returnType)) {
+      std::string returnTypeString = returnType.toString();
+      std::string exprTypeString = exprType->toString();
+
+      m_bag.report(DiagnosticLevel::Error, DiagnosticCode::TypeMismatch,
+                   stmt.span(),
+                   std::make_format_args(returnTypeString, exprTypeString));
+    }
+  }
+
   m_env = std::move(prevEnv);
   m_scopeReturnType = std::move(prevScopeReturnType);
-
-  if (!returnType.isEmpty() && flow.canContinue) {
-    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::VoidControlPaths,
-                 stmt.span(), std::make_format_args());
-  }
 
   return TypeFlow{.canContinue = true};
 }
@@ -202,6 +225,31 @@ TypeFlow TypeChecker::visitIfStmt(const bee::parser::IfStmt &stmt) {
 
 TypeFlow TypeChecker::visitBlockStmt(const bee::parser::BlockStmt &stmt) {
   TypeEnvironment blockEnv(TypeScopeKind::Block, m_env);
+  if (stmt.captureAnnotation() != std::nullopt) {
+    bee::parser::BlockCaptureAnnotation annotation =
+        stmt.captureAnnotation().value();
+
+    if (m_env->scopeKind() == TypeScopeKind::ForLoop) {
+      auto forCapturables = std::to_array<Type>({
+          Type::fromLexeme("int"),
+      });
+
+      if (annotation.captures.size() > forCapturables.size()) {
+        // TODO: add invalid capture count error diagnostic.
+      }
+
+      for (std::size_t i = 0; i < forCapturables.size(); i++) {
+        bee::lexer::Token captureToken = annotation.captures[i];
+        VariableSymbol captureSymbol(captureToken.lexeme(), true,
+                                     forCapturables[i]);
+        blockEnv.putSymbol(
+            std::make_unique<VariableSymbol>(std::move(captureSymbol)));
+      }
+    } else {
+      // TODO: add invalid capture scope error diagnostic.
+    }      
+  }
+
   std::shared_ptr<TypeEnvironment> prevEnv = std::move(m_env);
   m_env = std::make_shared<TypeEnvironment>(std::move(blockEnv));
 
@@ -258,7 +306,7 @@ TypeFlow TypeChecker::visitForStmt(const bee::parser::ForStmt &stmt) {
     }
   }
 
-  TypeEnvironment loopScope(TypeScopeKind::Block, m_env);
+  TypeEnvironment loopScope(TypeScopeKind::ForLoop, m_env);
   std::shared_ptr<TypeEnvironment> prevEnv = std::move(m_env);
   m_env = std::make_shared<TypeEnvironment>(std::move(loopScope));
 
@@ -298,28 +346,30 @@ TypeChecker::visitIdentifierExpr(const bee::parser::IdentifierExpr &expr) {
     return std::make_unique<Type>(Type::invalid());
   }
 
-  TypeSymbol symbol = m_env->getSymbol(expr.identifier().lexeme());
-  return std::make_unique<Type>(std::move(symbol.type()));
+  std::shared_ptr<TypeSymbol> symbol =
+      m_env->getSymbol(expr.identifier().lexeme());
+  return std::make_unique<Type>(std::move(symbol->type()));
 }
 
 std::unique_ptr<Type>
 TypeChecker::visitAssignmentExpr(const bee::parser::AssignmentExpr &expr) {
   std::unique_ptr<Type> valueType = visitExpr(*expr.value());
   std::string_view name = expr.identifier().lexeme();
+
   if (!m_env->hasSymbol(name)) {
     m_bag.report(DiagnosticLevel::Error, DiagnosticCode::UndefinedIdentifier,
                  expr.identifier().span(), std::make_format_args(name));
     return valueType;
   }
 
-  TypeSymbol symbol = m_env->getSymbol(name);
-  if (symbol.kind() != TypeSymbolKind::Variable) {
+  std::shared_ptr<TypeSymbol> symbol = m_env->getSymbol(name);
+  if (symbol->kind() != TypeSymbolKind::Variable) {
     m_bag.report(DiagnosticLevel::Error, DiagnosticCode::InvalidAssignment,
                  expr.span(), std::make_format_args("non-variable identifier"));
     return valueType;
   }
 
-  VariableSymbol &variableSymbol = static_cast<VariableSymbol &>(symbol);
+  VariableSymbol &variableSymbol = static_cast<VariableSymbol &>(*symbol);
   if (variableSymbol.isConst()) {
     m_bag.report(DiagnosticLevel::Error, DiagnosticCode::InvalidAssignment,
                  expr.span(), std::make_format_args("constant variable"));
@@ -342,6 +392,10 @@ std::unique_ptr<Type>
 TypeChecker::visitBinaryExpr(const bee::parser::BinaryExpr &expr) {
   std::unique_ptr<Type> leftType = visitExpr(*expr.left());
   std::unique_ptr<Type> rightType = visitExpr(*expr.right());
+
+  if (leftType->isInvalid() || rightType->isInvalid())
+    return std::make_unique<Type>(Type::invalid());
+
   if (!Type::isValidBinaryOperation(*leftType, expr.op().kind(), *rightType)) {
     std::string leftTypeString = leftType->toString();
     std::string rightTypeString = rightType->toString();
@@ -350,6 +404,7 @@ TypeChecker::visitBinaryExpr(const bee::parser::BinaryExpr &expr) {
     m_bag.report(DiagnosticLevel::Error,
                  DiagnosticCode::UnsupporetedBinaryOperation, expr.span(),
                  std::make_format_args(op, leftTypeString, rightTypeString));
+
     return std::make_unique<Type>(Type::invalid());
   }
 
@@ -382,6 +437,7 @@ TypeChecker::visitBinaryExpr(const bee::parser::BinaryExpr &expr) {
 std::unique_ptr<Type>
 TypeChecker::visitUnaryExpr(const bee::parser::UnaryExpr &expr) {
   std::unique_ptr<Type> operandType = visitExpr(*expr.operand());
+
   if (!Type::isValidUnaryOperation(expr.op().kind(), *operandType)) {
     std::string_view op = expr.op().lexeme();
     std::string operandTypeString = operandType->toString();
@@ -402,6 +458,7 @@ std::unique_ptr<Type> TypeChecker::visitParenthesizedExpr(
 std::unique_ptr<Type>
 TypeChecker::visitWhenExpr(const bee::parser::WhenExpr &expr) {
   std::unique_ptr<Type> conditionType = visitExpr(*expr.condition());
+
   if (conditionType->kind() != TypeKind::Bool) {
     std::string conditionTypeString = conditionType->toString();
 
@@ -417,7 +474,9 @@ TypeChecker::visitWhenExpr(const bee::parser::WhenExpr &expr) {
     std::string consequentTypeString = consequentType->toString();
     std::string alternateTypeString = alternateType->toString();
 
-    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::TypeMismatch, expr.span(), std::make_format_args(consequentTypeString, alternateTypeString));
+    m_bag.report(
+        DiagnosticLevel::Error, DiagnosticCode::TypeMismatch, expr.span(),
+        std::make_format_args(consequentTypeString, alternateTypeString));
   }
 
   return consequentType;
@@ -426,49 +485,67 @@ TypeChecker::visitWhenExpr(const bee::parser::WhenExpr &expr) {
 std::unique_ptr<Type>
 TypeChecker::visitCallExpr(const bee::parser::CallExpr &expr) {
   std::string_view functionName = expr.identifier().lexeme();
+
   if (!m_env->hasSymbol(functionName)) {
-    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::UndefinedIdentifier, expr.identifier().span(), std::make_format_args(functionName));
+    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::UndefinedIdentifier,
+                 expr.identifier().span(), std::make_format_args(functionName));
+
     return std::make_unique<Type>(Type::invalid());
   }
 
-  TypeSymbol symbol = m_env->getSymbol(functionName);
-  if (symbol.kind() != TypeSymbolKind::Function) {
-    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::NonFunctionCall, expr.span(), std::make_format_args());
+  std::shared_ptr<TypeSymbol> symbol = m_env->getSymbol(functionName);
+
+  if (symbol->kind() != TypeSymbolKind::Function) {
+    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::NonFunctionCall,
+                 expr.span(), std::make_format_args());
+
     return std::make_unique<Type>(Type::invalid());
   }
 
-  FunctionSymbol &functionSymbol = static_cast<FunctionSymbol &>(symbol);
+  FunctionSymbol &functionSymbol = static_cast<FunctionSymbol &>(*symbol);
   Type &functionType = functionSymbol.type();
+
   FunctionInfo &functionInfo =
       const_cast<FunctionInfo &>(std::get<FunctionInfo>(functionType.info()));
 
-  std::unique_ptr<Type> returnType = std::move(functionInfo.returnType);
+  std::unique_ptr<Type> functionReturnType =
+      std::make_unique<Type>(std::move(*functionInfo.returnType));
+
   const std::vector<std::unique_ptr<bee::parser::Expr>> &arguments =
       expr.arguments();
 
   if (functionSymbol.arity() != arguments.size()) {
     std::size_t functionArity = functionSymbol.arity();
     std::size_t argumentsSize = arguments.size();
-    
-    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::InvalidFunctionCallArity, expr.span(), std::make_format_args(functionName, functionArity, argumentsSize));
 
-    return returnType;
+    m_bag.report(
+        DiagnosticLevel::Error, DiagnosticCode::InvalidFunctionCallArity,
+        expr.span(),
+        std::make_format_args(functionName, functionArity, argumentsSize));
+
+    return functionReturnType;
   }
 
   const std::vector<Type> &paramsTypes = functionInfo.params;
   for (std::size_t i = 0; i < functionSymbol.arity(); i++) {
-    const Type &paramType = paramsTypes[i];
-    const std::unique_ptr<bee::parser::Expr> &argumentExpr = arguments[i];
+    const auto &paramType = paramsTypes[i];
+    const auto &argumentExpr = arguments[i];
+
     std::unique_ptr<Type> argumentType = visitExpr(*argumentExpr);
+    if (argumentType->isInvalid() || paramType.isInvalid())
+      continue;
+
     if (!argumentType->isAssignableTo(paramType)) {
       std::string paramTypeString = paramType.toString();
       std::string argumentTypeString = argumentType->toString();
 
-      m_bag.report(DiagnosticLevel::Error, DiagnosticCode::TypeMismatch, argumentExpr->span(), std::make_format_args(paramTypeString, argumentTypeString));
+      m_bag.report(DiagnosticLevel::Error, DiagnosticCode::TypeMismatch,
+                   argumentExpr->span(),
+                   std::make_format_args(paramTypeString, argumentTypeString));
     }
   }
 
-  return returnType;
+  return functionReturnType;
 }
 
 std::unique_ptr<Type>

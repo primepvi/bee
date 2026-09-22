@@ -10,6 +10,6 @@ fn sum(a: int, b: int): int -> a + b
 fn nothing(): void do end
 
 for 0..10 do |i|
-    echo sum(i, i + 1)
+    echo i
 end
 

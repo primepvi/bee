@@ -22,7 +22,7 @@ constexpr std::array diagnosticsMessageEntries =
         {DiagnosticCode::IdentifierAlreadyDeclared,
          "Identifier '{0}' already declared."},
         {DiagnosticCode::TypeMismatch,
-         "Expected type '{0}', but received type '{0}'"},
+         "Expected type '{0}', but received type '{1}'"},
         {DiagnosticCode::InvalidTypeAnnotation, "Invalid type annotation."},
         {DiagnosticCode::InvalidVoidUsage, "Void type cannot be used here."},
         {DiagnosticCode::InvalidReturnUsage,

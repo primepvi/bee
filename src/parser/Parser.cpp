@@ -271,7 +271,7 @@ std::unique_ptr<Stmt> Parser::parseFunctionDeclarationStmt() {
   std::unique_ptr<Stmt> body = nullptr;
   if (peek().kind() == TokenKind::ArrowSym) {
     eat();
-    body = parseStmt();
+    body = parseExprStmt();
   } else {
     auto endKinds = std::to_array<TokenKind>({TokenKind::EndKw});
     body = parseBlockStmt(endKinds);
