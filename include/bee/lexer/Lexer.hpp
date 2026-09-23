@@ -43,6 +43,7 @@ private:
   Token lexString();
   Token lexNumber();
   Token lexSymbol();
+  Token lexChar();
 };
 
 } // namespace bee::lexer

@@ -13,6 +13,10 @@ constexpr std::array diagnosticsMessageEntries =
         {DiagnosticCode::UnexpectedSymbol,
          "Unexpected symbol has received: {0}."},
         {DiagnosticCode::UnterminatedString, "Unterminated string has found."},
+        {DiagnosticCode::UnterminatedChar, "Unterminated char has found."},
+        {DiagnosticCode::InvalidCharLength,
+         "Attempt to create a char with more than one character."},        
+
         // Parser
         {DiagnosticCode::ExpectedToken, "Expected '{0}', but received '{1}'."},
         {DiagnosticCode::UnterminatedBlock, "Unterminated block has found."},

@@ -96,6 +96,7 @@ std::unique_ptr<Expr> Parser::parsePrimaryExpr() {
   case TokenKind::FalseKw:
   case TokenKind::StringLit:
   case TokenKind::NumberLit:
+  case TokenKind::CharLit:    
     return parseLiteralExpr();
 
   case TokenKind::OpenParenSym:

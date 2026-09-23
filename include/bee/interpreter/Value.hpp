@@ -8,6 +8,7 @@
 #include <string_view>
 
 #include "bee/parser/Ast.hpp"
+#include "utfcpp/utf8/checked.h"
 
 namespace bee::interpreter {
 
@@ -16,6 +17,7 @@ enum class ValueKind {
   UInt,
   Bool,
   String,
+  Char,
   Range,
   Function,
   Null,
@@ -109,6 +111,29 @@ public:
 
 private:
   std::string m_value;
+};
+
+class CharValue : public Value {
+public:
+  CharValue(char32_t value);
+
+  inline ValueKind kind() const override { return ValueKind::Char; }
+  inline std::string toString() const override {
+    std::string result;
+    utf8::append(m_value, std::back_inserter(result));
+    return result;
+  }
+  
+  inline std::unique_ptr<Value> clone() const override {
+    return std::make_unique<CharValue>(*this);
+  }
+
+  bool equals(const Value &other) const override;
+
+  inline char32_t value() const { return m_value; }
+
+private:
+  char32_t m_value;
 };
 
 class RangeValue : public Value {

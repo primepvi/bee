@@ -1,9 +1,11 @@
 #include <cctype>
 #include <format>
+#include <string_view>
 
 #include "bee/Diagnostics.hpp"
 #include "bee/lexer/Lexer.hpp"
 #include "bee/lexer/Token.hpp"
+#include "utfcpp/utf8.h"
 
 namespace bee::lexer {
 
@@ -21,6 +23,8 @@ Token Lexer::nextToken() {
     return this->lexKeyword();
   if (current == '"')
     return this->lexString();
+  if (current == '\'')
+    return this->lexChar();
   if (isdigit(current))
     return this->lexNumber();
 
@@ -66,11 +70,57 @@ Token Lexer::lexString() {
   Token token(TokenKind::StringLit, lexeme, this->span(lexeme.length()));
 
   if (this->peek() != '"') {
-    m_bag.report(bee::DiagnosticLevel::Error, bee::DiagnosticCode::UnterminatedString,
-                 token.span(), std::make_format_args());
+    m_bag.report(bee::DiagnosticLevel::Error,
+                 bee::DiagnosticCode::UnterminatedString, token.span(),
+                 std::make_format_args());
   } else {
     this->advance(); // eating second string quote symbol.
   }
+
+  return token;
+}
+
+Token Lexer::lexChar() {
+  this->advance(); // eating first quote symbol
+
+  const std::string &code = m_source.code();
+  if (!this->hasMoreTokens()) {
+    m_bag.report(bee::DiagnosticLevel::Error,
+                 bee::DiagnosticCode::UnterminatedChar, this->span(1),
+                 std::make_format_args());
+
+    return Token(TokenKind::Invalid, "", this->span(1));
+  }
+
+  auto it = code.begin() + m_cursor;
+  auto itStart = it;
+
+  std::size_t start = m_cursor;
+
+  utf8::next(it, code.end());
+  std::size_t bytes = it - itStart;
+  m_cursor += bytes;
+
+  if (this->peek() == '\'') {
+    this->advance();
+    std::string_view lexeme =
+        std::string_view(m_source.code()).substr(start, bytes);
+
+    return Token(TokenKind::CharLit, lexeme, this->span(bytes));
+  }
+
+  while (this->hasMoreTokens() && this->peek() != '\'' && this->peek() != '\n')
+    this->advance();
+      
+  if (this->peek() == '\'')
+    this->advance();
+
+  std::string_view lexeme =
+      std::string_view(m_source.code()).substr(start, m_cursor - start);
+  Token token(TokenKind::Invalid, lexeme, this->span(m_cursor - start));
+  
+  m_bag.report(DiagnosticLevel::Error, DiagnosticCode::InvalidCharLength,
+               token.span(), std::make_format_args());
 
   return token;
 }
@@ -107,8 +157,9 @@ Token Lexer::lexSymbol() {
   Token token(kind, lexeme, this->span(1));
 
   if (kind == TokenKind::Invalid) {
-    m_bag.report(bee::DiagnosticLevel::Error, bee::DiagnosticCode::UnexpectedSymbol,
-                 token.span(), std::make_format_args(lexeme));
+    m_bag.report(bee::DiagnosticLevel::Error,
+                 bee::DiagnosticCode::UnexpectedSymbol, token.span(),
+                 std::make_format_args(lexeme));
   }
 
   return token;

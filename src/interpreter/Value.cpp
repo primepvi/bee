@@ -39,6 +39,15 @@ bool StringValue::equals(const Value &other) const {
   return m_value == otherValue.value();
 }
 
+CharValue::CharValue(char32_t value) : m_value(value) {}
+bool CharValue::equals(const Value &other) const {
+  if (other.kind() != this->kind())
+    return false;
+
+  const CharValue &otherValue = static_cast<const CharValue &>(other);
+  return m_value == otherValue.value();
+}  
+
 RangeValue::RangeValue(std::int64_t start, std::int64_t end)
     : m_start(start), m_end(end) {}
 

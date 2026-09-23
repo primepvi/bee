@@ -14,6 +14,7 @@ enum class TypeKind {
   UInt,
   Bool,
   String,
+  Char,
   Range,
   Function,
   Void,

@@ -348,6 +348,8 @@ TypeChecker::visitLiteralExpr(const bee::parser::LiteralExpr &expr) {
     return std::make_unique<Type>(Type::fromLexeme("bool"));
   case TokenKind::NullKw:
     return std::make_unique<Type>(Type::fromLexeme("null"));
+  case TokenKind::CharLit:
+    return std::make_unique<Type>(Type::fromLexeme("char"));
   default:
     return std::make_unique<Type>(Type::invalid());
   }

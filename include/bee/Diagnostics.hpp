@@ -17,6 +17,8 @@ enum class DiagnosticCode {
   // Lexer
   UnexpectedSymbol,
   UnterminatedString,
+  UnterminatedChar,
+  InvalidCharLength,
 
   // Parser
   ExpectedToken,

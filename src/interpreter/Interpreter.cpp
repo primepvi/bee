@@ -3,11 +3,13 @@
 #include "bee/interpreter/ValueEnvironment.hpp"
 #include "bee/lexer/Token.hpp"
 #include "bee/parser/Ast.hpp"
-#include <algorithm>
 #include <iostream>
 #include <memory>
 #include <optional>
 #include <stdexcept>
+
+#include "utfcpp/utf8.h"
+#include "utfcpp/utf8/checked.h"
 
 namespace bee::interpreter {
 
@@ -202,6 +204,13 @@ Interpreter::visitLiteralExpr(const bee::parser::LiteralExpr &expr) {
     return std::make_unique<BoolValue>(value);
   }
 
+  case TokenKind::CharLit: {
+    std::string lexeme = std::string(token.lexeme());
+    auto it = lexeme.begin();
+    char32_t value = utf8::next(it, lexeme.end());
+    return std::make_unique<CharValue>(value);
+  }    
+
   case TokenKind::NullKw:
     return std::make_unique<NullValue>();
 
@@ -223,6 +232,11 @@ Interpreter::visitIdentifierExpr(const bee::parser::IdentifierExpr &expr) {
     StringValue &value = static_cast<StringValue &>(*rawValue);
     return std::make_unique<StringValue>(value);
   }
+
+  case ValueKind::Char: {
+    CharValue &value = static_cast<CharValue &>(*rawValue);
+    return std::make_unique<CharValue>(value);
+  }    
 
   case ValueKind::Bool: {
     BoolValue &value = static_cast<BoolValue &>(*rawValue);

@@ -35,6 +35,7 @@ enum class TokenKind {
   // Literals
   NumberLit,
   StringLit,
+  CharLit,
 
   // Symbols,
   ColonSym,

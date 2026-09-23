@@ -17,6 +17,7 @@ constexpr std::array typeEntries = std::to_array<TypeEntry>({
     {"uint", TypeKind::UInt},
     {"bool", TypeKind::Bool},
     {"string", TypeKind::String},
+    {"char", TypeKind::Char},    
     {"Range", TypeKind::Range},
     {"Function", TypeKind::Function},
     {"void", TypeKind::Void},

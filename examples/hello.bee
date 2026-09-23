@@ -1,22 +1,7 @@
 const a = 10
-const b: int? = null
+const b: char = '🐝'
+const c: string = "hello"
 
-fn sum(a: int, b: int): int -> a + b
-fn print(message: string): void do
-   echo message
-end
-
-for 10..0, 2 do |i|
-    echo sum(i, i * 2)
-end
-
-let message: string = "Hello, World!"
-print(message)
-
-if a + 1 == 10 do
-   echo "a + 1 = 10"
-else if a + 0 == 10 do
-   echo "a + 0 == 10"
-else do
-   echo a
-end
+echo a
+echo b
+echo c
