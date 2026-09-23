@@ -37,6 +37,8 @@ enum class DiagnosticCode {
   UnsupporetedBinaryOperation,
   UnsupportedUnaryOperation,
   NonFunctionCall,
+  InvalidBlockCaptureCount,
+  InvalidBlockCaptureScope,
 };
 
 struct Diagnostic {

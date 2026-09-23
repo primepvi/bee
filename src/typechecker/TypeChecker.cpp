@@ -235,19 +235,35 @@ TypeFlow TypeChecker::visitBlockStmt(const bee::parser::BlockStmt &stmt) {
       });
 
       if (annotation.captures.size() > forCapturables.size()) {
-        // TODO: add invalid capture count error diagnostic.
+	std::size_t capturablesSize = forCapturables.size();
+        std::size_t capturesSize = annotation.captures.size();
+	
+	m_bag.report(DiagnosticLevel::Error, DiagnosticCode::InvalidBlockCaptureCount, stmt.span(), std::make_format_args("for statement scope", capturablesSize, capturesSize));
       }
 
-      for (std::size_t i = 0; i < forCapturables.size(); i++) {
+      for (std::size_t i = 0; i < annotation.captures.size(); i++) {
         bee::lexer::Token captureToken = annotation.captures[i];
+        Type capturableType =
+            i < forCapturables.size() ? forCapturables[i] : Type::invalid();
+        
         VariableSymbol captureSymbol(captureToken.lexeme(), true,
-                                     forCapturables[i]);
+                                     capturableType);
         blockEnv.putSymbol(
             std::make_unique<VariableSymbol>(std::move(captureSymbol)));
       }
     } else {
-      // TODO: add invalid capture scope error diagnostic.
-    }      
+      m_bag.report(DiagnosticLevel::Error,
+                   DiagnosticCode::InvalidBlockCaptureScope, stmt.span(),
+                   std::make_format_args());
+      
+      for (std::size_t i = 0; i < annotation.captures.size(); i++) {
+        bee::lexer::Token captureToken = annotation.captures[i];
+        VariableSymbol captureSymbol(captureToken.lexeme(), true,
+                                     Type::invalid());
+        blockEnv.putSymbol(
+            std::make_unique<VariableSymbol>(std::move(captureSymbol)));
+      }
+    }
   }
 
   std::shared_ptr<TypeEnvironment> prevEnv = std::move(m_env);

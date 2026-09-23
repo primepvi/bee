@@ -6,10 +6,10 @@ fn main(): void do
    echo message   
 end
 
-fn sum(a: int, b: int): int -> a + b
+fn sum(a: int, b: int): int -> main()
 fn nothing(): void do end
 
 for 0..10 do |i|
-    echo i
+    echo i * 2
 end
 

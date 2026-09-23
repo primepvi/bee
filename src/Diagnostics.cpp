@@ -44,7 +44,12 @@ constexpr std::array diagnosticsMessageEntries =
         {DiagnosticCode::UnsupportedUnaryOperation,
          "The unary operator '{0}' not supports an operand of type '{1}'."},
         {DiagnosticCode::NonFunctionCall,
-         "Attempt to call a non-function identifier."},        
+         "Attempt to call a non-function identifier."},
+        {DiagnosticCode::InvalidBlockCaptureCount,
+         "The '{0}' block provides {1} capturables values, but has received "
+         "{2} identifiers."},
+        {DiagnosticCode::InvalidBlockCaptureScope,
+         "The current scope don't provides capturables values."},
     });
 
 std::string_view getDiagnosticLevelName(DiagnosticLevel level) {
