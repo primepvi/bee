@@ -15,9 +15,12 @@ using bee::parser::TypeAnnotation;
 constexpr std::array typeEntries = std::to_array<TypeEntry>({
     {"int", TypeKind::Int},
     {"uint", TypeKind::UInt},
+    {"byte", TypeKind::Byte},
+    {"ubyte", TypeKind::UByte},
+    {"float", TypeKind::Float},
     {"bool", TypeKind::Bool},
     {"string", TypeKind::String},
-    {"char", TypeKind::Char},    
+    {"char", TypeKind::Char},
     {"Range", TypeKind::Range},
     {"Function", TypeKind::Function},
     {"void", TypeKind::Void},
@@ -63,7 +66,7 @@ Type Type::range(Type type) {
   };
 
   return Type(TypeKind::Range, false, std::move(info));
-}  
+}
 
 Type Type::invalid() { return Type(TypeKind::Invalid, false); }
 Type Type::empty() { return Type(TypeKind::Void, false); }
@@ -80,8 +83,12 @@ bool Type::isValidBinaryOperation(const Type &left, bee::lexer::TokenKind op,
   case TokenKind::LteSym:
   case TokenKind::GtSym:
   case TokenKind::GteSym:
+    return left.isNumeric() && right.isNumeric() && left.kind() == right.kind() &&
+           !left.isNullable() && !right.isNullable();
+    
   case TokenKind::DoubleDotSym:
-    return left.kind() == TypeKind::Int && right.kind() == TypeKind::Int && !left.nullable() && !right.nullable();
+    return left.kind() == TypeKind::Int && right.kind() == TypeKind::Int &&
+           !left.isNullable() && !right.isNullable();
 
   case TokenKind::EqEqSym:
   case TokenKind::NeqSym:
@@ -90,7 +97,8 @@ bool Type::isValidBinaryOperation(const Type &left, bee::lexer::TokenKind op,
 
   case TokenKind::AndKw:
   case TokenKind::OrKw:
-    return left.kind() == TypeKind::Bool && right.kind() == TypeKind::Bool && !left.nullable() && !right.nullable();
+    return left.kind() == TypeKind::Bool && right.kind() == TypeKind::Bool &&
+           !left.isNullable() && !right.isNullable();
 
   default:
     return false;
@@ -101,10 +109,10 @@ bool Type::isValidUnaryOperation(TokenKind op, const Type &operand) {
   switch (op) {
   case TokenKind::MinusSym:
   case TokenKind::PlusSym:
-    return operand.kind() == TypeKind::Int && !operand.nullable();
+    return operand.isNumeric() && !operand.isNullable();
 
   case TokenKind::NotKw:
-    return operand.kind() == TypeKind::Bool && !operand.nullable();
+    return operand.kind() == TypeKind::Bool && !operand.isNullable();
 
   default:
     return false;
@@ -146,7 +154,7 @@ std::string Type::toString() const {
 
 bool Type::isAssignableTo(const Type &other) const {
   if (m_kind == TypeKind::Null)
-    return other.nullable() || other.kind() == TypeKind::Null;
+    return other.isNullable() || other.kind() == TypeKind::Null;
 
   if (this->isEmpty() || this->isInvalid() || other.isEmpty() ||
       other.isInvalid())
@@ -162,16 +170,16 @@ bool Type::isAssignableTo(const Type &other) const {
   case TypeKind::Function: {
     const FunctionInfo &info = std::get<FunctionInfo>(m_info);
     const FunctionInfo &otherInfo = std::get<FunctionInfo>(other.info());
-    
+
     if (info.params.size() != otherInfo.params.size())
       return false;
 
     if (!info.returnType->isEqual(*otherInfo.returnType))
       return false;
-    
+
     for (std::size_t i = 0; i < info.params.size(); i++) {
       if (!info.params[i].isEqual(otherInfo.params[i]))
-	return false;
+        return false;
     }
 
     return true;
@@ -181,8 +189,8 @@ bool Type::isAssignableTo(const Type &other) const {
     const RangeInfo &info = std::get<RangeInfo>(m_info);
     const RangeInfo &otherInfo = std::get<RangeInfo>(other.info());
     return info.type->isEqual(*otherInfo.type);
-  }    
-    
+  }
+
   default:
     return true;
   }

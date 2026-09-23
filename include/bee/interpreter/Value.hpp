@@ -15,6 +15,9 @@ namespace bee::interpreter {
 enum class ValueKind {
   Int,
   UInt,
+  Byte,
+  UByte,
+  Float,
   Bool,
   String,
   Char,
@@ -31,6 +34,23 @@ public:
   virtual std::unique_ptr<Value> clone() const = 0;
   virtual bool equals(const Value &other) const = 0;
 };
+
+std::unique_ptr<Value> evalAdd(const Value &left, const Value &right);
+std::unique_ptr<Value> evalSub(const Value &left, const Value &right);
+std::unique_ptr<Value> evalMulti(const Value &left, const Value &right);
+std::unique_ptr<Value> evalDiv(const Value &left, const Value &right);
+std::unique_ptr<Value> evalMod(const Value &left, const Value &right);
+std::unique_ptr<Value> evalRange(const Value &left, const Value &right);
+
+bool evalLt(const Value &left, const Value &right);
+bool evalLte(const Value &left, const Value &right);
+bool evalGt(const Value &left, const Value &right);
+bool evalGte(const Value &left, const Value &right);
+bool evalAnd(const Value &left, const Value &right);
+bool evalOr(const Value &left, const Value &right);
+
+std::unique_ptr<Value> evalMinus(const Value &operand);
+bool evalNegation(const Value &operand);
 
 class IntValue : public Value {
 public:
@@ -72,6 +92,69 @@ public:
 
 private:
   std::uint64_t m_value;
+};
+
+class ByteValue : public Value {
+public:
+  ByteValue(std::int8_t value);
+
+  inline ValueKind kind() const override { return ValueKind::Byte; }
+  inline std::string toString() const override {
+    return std::to_string(m_value);
+  }
+
+  inline std::unique_ptr<Value> clone() const override {
+    return std::make_unique<ByteValue>(*this);
+  }
+
+  bool equals(const Value &other) const override;
+
+  inline std::int8_t value() const { return m_value; }
+
+private:
+  std::int8_t m_value;
+};
+
+class UByteValue : public Value {
+public:
+  UByteValue(std::uint8_t value);
+
+  inline ValueKind kind() const override { return ValueKind::UByte; }
+  inline std::string toString() const override {
+    return std::to_string(m_value);
+  }
+
+  inline std::unique_ptr<Value> clone() const override {
+    return std::make_unique<UByteValue>(*this);
+  }
+
+  bool equals(const Value &other) const override;
+
+  inline std::uint8_t value() const { return m_value; }
+
+private:
+  std::uint8_t m_value;
+};
+
+class FloatValue : public Value {
+public:
+  FloatValue(double value);
+
+  inline ValueKind kind() const override { return ValueKind::Float; }
+  inline std::string toString() const override {
+    return std::to_string(m_value);
+  }
+
+  inline std::unique_ptr<Value> clone() const override {
+    return std::make_unique<FloatValue>(*this);
+  }
+
+  bool equals(const Value &other) const override;
+
+  inline double value() const { return m_value; }
+
+private:
+  double m_value;
 };
 
 class BoolValue : public Value {
@@ -123,7 +206,7 @@ public:
     utf8::append(m_value, std::back_inserter(result));
     return result;
   }
-  
+
   inline std::unique_ptr<Value> clone() const override {
     return std::make_unique<CharValue>(*this);
   }
@@ -196,7 +279,7 @@ public:
   inline std::unique_ptr<Value> clone() const override {
     return std::make_unique<NullValue>();
   }
-
+  
   inline bool equals(const Value &other) const override {
     return other.kind() == this->kind();
   }

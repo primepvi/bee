@@ -7,8 +7,8 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <string>
 
-#include "utfcpp/utf8.h"
 #include "utfcpp/utf8/checked.h"
 
 namespace bee::interpreter {
@@ -190,9 +190,13 @@ Interpreter::visitLiteralExpr(const bee::parser::LiteralExpr &expr) {
   bee::lexer::Token token = expr.value();
 
   switch (token.kind()) {
-  case TokenKind::NumberLit: {
+  case TokenKind::IntegerLit: {
     std::int64_t value = std::stoll(std::string(token.lexeme()));
     return std::make_unique<IntValue>(value);
+  }
+  case TokenKind::FloatLit: {
+    double value = std::stod(std::string(token.lexeme()));
+    return std::make_unique<FloatValue>(value);
   }
   case TokenKind::StringLit: {
     std::string value = std::string(token.lexeme());
@@ -209,7 +213,7 @@ Interpreter::visitLiteralExpr(const bee::parser::LiteralExpr &expr) {
     auto it = lexeme.begin();
     char32_t value = utf8::next(it, lexeme.end());
     return std::make_unique<CharValue>(value);
-  }    
+  }
 
   case TokenKind::NullKw:
     return std::make_unique<NullValue>();
@@ -223,29 +227,6 @@ std::unique_ptr<Value>
 Interpreter::visitIdentifierExpr(const bee::parser::IdentifierExpr &expr) {
   std::shared_ptr<Value> rawValue = m_env->getValue(expr.identifier().lexeme());
   switch (rawValue->kind()) {
-  case ValueKind::Int: {
-    IntValue &value = static_cast<IntValue &>(*rawValue);
-    return std::make_unique<IntValue>(value);
-  }
-
-  case ValueKind::String: {
-    StringValue &value = static_cast<StringValue &>(*rawValue);
-    return std::make_unique<StringValue>(value);
-  }
-
-  case ValueKind::Char: {
-    CharValue &value = static_cast<CharValue &>(*rawValue);
-    return std::make_unique<CharValue>(value);
-  }    
-
-  case ValueKind::Bool: {
-    BoolValue &value = static_cast<BoolValue &>(*rawValue);
-    return std::make_unique<BoolValue>(value);
-  }
-
-  case ValueKind::Null:
-    return std::make_unique<NullValue>();
-
   case ValueKind::Range: {
     RangeValue &value = static_cast<RangeValue &>(*rawValue);
     return std::make_unique<RangeValue>(value);
@@ -257,7 +238,7 @@ Interpreter::visitIdentifierExpr(const bee::parser::IdentifierExpr &expr) {
   }
 
   default:
-    throw std::runtime_error("Unreachable (Interpreter::visitIdentifierExpr).");
+    return rawValue->clone();
   }
 }
 
@@ -299,70 +280,43 @@ Interpreter::visitBinaryExpr(const bee::parser::BinaryExpr &expr) {
   std::unique_ptr<Value> rightValue = visitExpr(*expr.right());
 
   switch (expr.op().kind()) {
-  case TokenKind::PlusSym: {
-    IntValue &left = static_cast<IntValue &>(*leftValue);
-    IntValue &right = static_cast<IntValue &>(*rightValue);
-    return std::make_unique<IntValue>(left.value() + right.value());
-  }
-
-  case TokenKind::MinusSym: {
-    IntValue &left = static_cast<IntValue &>(*leftValue);
-    IntValue &right = static_cast<IntValue &>(*rightValue);
-    return std::make_unique<IntValue>(left.value() - right.value());
-  }
-
-  case TokenKind::StarSym: {
-    IntValue &left = static_cast<IntValue &>(*leftValue);
-    IntValue &right = static_cast<IntValue &>(*rightValue);
-    return std::make_unique<IntValue>(left.value() * right.value());
-  }
-
-  case TokenKind::SlashSym: {
-    IntValue &left = static_cast<IntValue &>(*leftValue);
-    IntValue &right = static_cast<IntValue &>(*rightValue);
-    return std::make_unique<IntValue>(left.value() / right.value());
-  }
-
-  case TokenKind::PercentageSym: {
-    IntValue &left = static_cast<IntValue &>(*leftValue);
-    IntValue &right = static_cast<IntValue &>(*rightValue);
-    return std::make_unique<IntValue>(left.value() % right.value());
-  }
-
-  case TokenKind::DoubleDotSym: {
-    IntValue &left = static_cast<IntValue &>(*leftValue);
-    IntValue &right = static_cast<IntValue &>(*rightValue);
-    return std::make_unique<RangeValue>(left.value(), right.value());
-  }
+  case TokenKind::PlusSym:
+    return evalAdd(*leftValue, *rightValue);
+  case TokenKind::MinusSym:
+    return evalSub(*leftValue, *rightValue);
+  case TokenKind::StarSym:
+    return evalMulti(*leftValue, *rightValue);
+  case TokenKind::SlashSym:
+    return evalDiv(*leftValue, *rightValue);
+  case TokenKind::PercentageSym:
+    return evalMod(*leftValue, *rightValue);
+  case TokenKind::DoubleDotSym:
+    return evalRange(*leftValue, *rightValue);
 
   case TokenKind::LtSym: {
-    IntValue &left = static_cast<IntValue &>(*leftValue);
-    IntValue &right = static_cast<IntValue &>(*rightValue);
-    return std::make_unique<BoolValue>(left.value() < right.value());
+    bool result = evalLt(*leftValue, *rightValue);
+    return std::make_unique<BoolValue>(result);
   }
 
   case TokenKind::LteSym: {
-    IntValue &left = static_cast<IntValue &>(*leftValue);
-    IntValue &right = static_cast<IntValue &>(*rightValue);
-    return std::make_unique<BoolValue>(left.value() <= right.value());
+    bool result = evalLte(*leftValue, *rightValue);
+    return std::make_unique<BoolValue>(result);
   }
 
   case TokenKind::GtSym: {
-    IntValue &left = static_cast<IntValue &>(*leftValue);
-    IntValue &right = static_cast<IntValue &>(*rightValue);
-    return std::make_unique<BoolValue>(left.value() > right.value());
+    bool result = evalGt(*leftValue, *rightValue);
+    return std::make_unique<BoolValue>(result);
   }
 
   case TokenKind::GteSym: {
-    IntValue &left = static_cast<IntValue &>(*leftValue);
-    IntValue &right = static_cast<IntValue &>(*rightValue);
-    return std::make_unique<BoolValue>(left.value() >= right.value());
+    bool result = evalGte(*leftValue, *rightValue);
+    return std::make_unique<BoolValue>(result);
   }
 
   case TokenKind::EqEqSym:
     return std::make_unique<BoolValue>(leftValue->equals(*rightValue));
   case TokenKind::NeqSym:
-    return std::make_unique<BoolValue>(leftValue->equals(*rightValue));
+    return std::make_unique<BoolValue>(!leftValue->equals(*rightValue));
 
   default:
     throw std::runtime_error("Unreachable (Interpreter::visitBinaryExpr).");
@@ -374,20 +328,16 @@ Interpreter::visitUnaryExpr(const bee::parser::UnaryExpr &expr) {
   std::unique_ptr<Value> operandValue = visitExpr(*expr.operand());
 
   switch (expr.op().kind()) {
-  case TokenKind::MinusSym: {
-    IntValue &operand = static_cast<IntValue &>(*operandValue);
-    return std::make_unique<IntValue>(-operand.value());
-  }
+  case TokenKind::MinusSym:
+    return evalMinus(*operandValue);
 
-  case TokenKind::PlusSym: {
-    IntValue &operand = static_cast<IntValue &>(*operandValue);
-    return std::make_unique<IntValue>(+operand.value());
-  }
+  case TokenKind::PlusSym:
+    return operandValue;
 
   case TokenKind::NotKw: {
-    BoolValue &operand = static_cast<BoolValue &>(*operandValue);
-    return std::make_unique<BoolValue>(!operand.value());
-  }
+    bool result = evalNegation(*operandValue);
+    return std::make_unique<BoolValue>(result);
+  }    
 
   default:
     throw std::runtime_error("Unreachable (Interpreter::visitUnaryExpr).");

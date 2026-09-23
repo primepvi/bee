@@ -11,7 +11,7 @@ constexpr std::array diagnosticsMessageEntries =
     std::to_array<DiagnosticEntry>({
         // Lexer
         {DiagnosticCode::UnexpectedSymbol,
-         "Unexpected symbol has received: {0}."},
+         "Unexpected symbol has received: '{0}'."},
         {DiagnosticCode::UnterminatedString, "Unterminated string has found."},
         {DiagnosticCode::UnterminatedChar, "Unterminated char has found."},
         {DiagnosticCode::InvalidCharLength,

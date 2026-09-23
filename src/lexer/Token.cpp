@@ -69,7 +69,8 @@ constexpr std::array tokenKindNameEntries = std::to_array<TokenEntry>({
     {TokenKind::Identifier, "Identifier"},
 
     // Literals
-    {TokenKind::NumberLit, "Number_LIT"},
+    {TokenKind::FloatLit, "Float_LIT"},    
+    {TokenKind::IntegerLit, "Integer_LIT"},
     {TokenKind::StringLit, "String_LIT"},
     {TokenKind::CharLit, "Char_LIT"},    
 

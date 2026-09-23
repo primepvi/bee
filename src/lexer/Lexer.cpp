@@ -5,6 +5,7 @@
 #include "bee/Diagnostics.hpp"
 #include "bee/lexer/Lexer.hpp"
 #include "bee/lexer/Token.hpp"
+
 #include "utfcpp/utf8.h"
 
 namespace bee::lexer {
@@ -111,14 +112,14 @@ Token Lexer::lexChar() {
 
   while (this->hasMoreTokens() && this->peek() != '\'' && this->peek() != '\n')
     this->advance();
-      
+
   if (this->peek() == '\'')
     this->advance();
 
   std::string_view lexeme =
       std::string_view(m_source.code()).substr(start, m_cursor - start);
   Token token(TokenKind::Invalid, lexeme, this->span(m_cursor - start));
-  
+
   m_bag.report(DiagnosticLevel::Error, DiagnosticCode::InvalidCharLength,
                token.span(), std::make_format_args());
 
@@ -127,13 +128,21 @@ Token Lexer::lexChar() {
 
 Token Lexer::lexNumber() {
   std::size_t start = m_cursor;
-  while (this->hasMoreTokens() && isdigit(this->peek())) {
+  bool isFloat = false;
+
+  while (this->hasMoreTokens() && isdigit(this->peek()) ||
+         (this->peek() == '.' && !isFloat)) {
+
+    if (this->peek() == '.')
+      isFloat = true;
+    
     this->advance();
   }
 
+  TokenKind kind = isFloat ? TokenKind::FloatLit : TokenKind::IntegerLit; 
   std::string_view lexeme =
       std::string_view(m_source.code()).substr(start, m_cursor - start);
-  return Token(TokenKind::NumberLit, lexeme, this->span(lexeme.length()));
+  return Token(kind, lexeme, this->span(lexeme.length()));
 }
 
 Token Lexer::lexSymbol() {

@@ -95,7 +95,8 @@ std::unique_ptr<Expr> Parser::parsePrimaryExpr() {
   case TokenKind::TrueKw:
   case TokenKind::FalseKw:
   case TokenKind::StringLit:
-  case TokenKind::NumberLit:
+  case TokenKind::IntegerLit:
+  case TokenKind::FloatLit:
   case TokenKind::CharLit:    
     return parseLiteralExpr();
 
@@ -499,7 +500,9 @@ bool Parser::canStartExpr() const {
   case TokenKind::NullKw:
   case TokenKind::TrueKw:
   case TokenKind::FalseKw:
-  case TokenKind::NumberLit:
+  case TokenKind::FloatLit:    
+  case TokenKind::IntegerLit:
+  case TokenKind::CharLit:
   case TokenKind::StringLit:
   case TokenKind::OpenParenSym:
   case TokenKind::CloseParenSym:

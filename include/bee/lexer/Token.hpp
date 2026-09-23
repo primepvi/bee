@@ -33,7 +33,8 @@ enum class TokenKind {
   Identifier,
 
   // Literals
-  NumberLit,
+  FloatLit,
+  IntegerLit,
   StringLit,
   CharLit,
 

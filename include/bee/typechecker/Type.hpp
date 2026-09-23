@@ -12,6 +12,9 @@ namespace bee::typechecker {
 enum class TypeKind {
   Int,
   UInt,
+  Byte,
+  UByte,
+  Float,
   Bool,
   String,
   Char,
@@ -58,20 +61,25 @@ public:
                                     const Type &operand);
 
   std::string toString() const;
-  
   bool isAssignableTo(const Type &other) const;
-  
+
   inline TypeKind kind() const { return m_kind; }
   inline const TypeInfo &info() const { return m_info; }
-  inline bool nullable() const { return m_nullable; }
+  inline bool isNullable() const { return m_nullable; }
   
+  inline bool isNumeric() const {
+    return m_kind == TypeKind::Int || m_kind == TypeKind::UInt ||
+           m_kind == TypeKind::Byte || m_kind == TypeKind::UByte ||
+           m_kind == TypeKind::Float;
+  }
+
   inline bool isEmpty() const { return m_kind == TypeKind::Void; }
   inline bool isInvalid() const { return m_kind == TypeKind::Invalid; }
 
   inline bool isEqual(const Type &other) const {
     return this->toString() == other.toString();
   }
-  
+
 private:
   TypeKind m_kind;
   bool m_nullable;
