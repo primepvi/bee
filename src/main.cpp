@@ -2,6 +2,7 @@
 
 #include "bee/Diagnostics.hpp"
 #include "bee/Source.hpp"
+#include "bee/interpreter/Interpreter.hpp"
 #include "bee/lexer/Lexer.hpp"
 #include "bee/parser/Ast.hpp"
 #include "bee/parser/AstDumper.hpp"
@@ -16,6 +17,7 @@ using bee::parser::AstDumper;
 using bee::parser::Parser;
 using bee::parser::Program;
 using bee::typechecker::TypeChecker;
+using bee::interpreter::Interpreter;
 
 int main(void) {
   const Source source = Source::fromFile("examples/hello.bee");
@@ -52,5 +54,8 @@ int main(void) {
   if (!bag.isEmpty()) {
     bag.write(std::cerr);
     return 1;
-  }    
+  }
+
+  Interpreter interpreter(program);
+  interpreter.interpret();
 }

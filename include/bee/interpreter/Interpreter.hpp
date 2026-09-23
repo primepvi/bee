@@ -12,10 +12,10 @@ namespace bee::interpreter {
 
 struct Result {
   bool isReturn;
-  std::optional<Value> value;
+  std::optional<std::unique_ptr<Value>> value;
 };
 
-class Interpreter : public bee::parser::ExprVisitor<Value>,
+  class Interpreter : public bee::parser::ExprVisitor<std::unique_ptr<Value>>,
                     public bee::parser::StmtVisitor<Result> {
 public:
   Interpreter(const bee::parser::Program &program);
@@ -34,16 +34,16 @@ public:
   Result visitForStmt(const bee::parser::ForStmt &stmt) override;
   Result visitInvalidStmt(const bee::parser::InvalidStmt &stmt) override;
 
-  Value visitLiteralExpr(const bee::parser::LiteralExpr &expr) override;
-  Value visitIdentifierExpr(const bee::parser::IdentifierExpr &expr) override;
-  Value visitAssignmentExpr(const bee::parser::AssignmentExpr &expr) override;
-  Value visitBinaryExpr(const bee::parser::BinaryExpr &expr) override;
-  Value visitUnaryExpr(const bee::parser::UnaryExpr &expr) override;
-  Value
+  std::unique_ptr<Value> visitLiteralExpr(const bee::parser::LiteralExpr &expr) override;
+  std::unique_ptr<Value> visitIdentifierExpr(const bee::parser::IdentifierExpr &expr) override;
+  std::unique_ptr<Value> visitAssignmentExpr(const bee::parser::AssignmentExpr &expr) override;
+  std::unique_ptr<Value> visitBinaryExpr(const bee::parser::BinaryExpr &expr) override;
+  std::unique_ptr<Value> visitUnaryExpr(const bee::parser::UnaryExpr &expr) override;
+  std::unique_ptr<Value>
   visitParenthesizedExpr(const bee::parser::ParenthesizedExpr &expr) override;
-  Value visitWhenExpr(const bee::parser::WhenExpr &expr) override;
-  Value visitCallExpr(const bee::parser::CallExpr &expr) override;
-  Value visitInvalidExpr(const bee::parser::InvalidExpr &expr) override;
+  std::unique_ptr<Value> visitWhenExpr(const bee::parser::WhenExpr &expr) override;
+  std::unique_ptr<Value> visitCallExpr(const bee::parser::CallExpr &expr) override;
+  std::unique_ptr<Value> visitInvalidExpr(const bee::parser::InvalidExpr &expr) override;
 
 private:
   std::shared_ptr<ValueEnvironment> m_env;

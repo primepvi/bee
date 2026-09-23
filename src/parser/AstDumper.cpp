@@ -67,7 +67,8 @@ void AstDumper::visitVariableDeclarationStmt(
     TypeAnnotation annotation = stmt.typeAnnotation().value();
     m_output << makeDumpProperty(childPrefix, COMMON_SYM, "Type Annotation:");
     m_output << makeDumpValue(std::string(annotation.identifier.lexeme()))
-             << '\n';
+             << ", " << makeDumpValue(std::to_string(annotation.nullable))
+             << "\n";
   }
 
   m_output << makeDumpProperty(childPrefix, LAST_SYM, "Value:") << '\n';
@@ -86,7 +87,9 @@ void AstDumper::visitFunctionDeclarationStmt(
   m_output << makeDumpProperty(childPrefix, COMMON_SYM, "Type Annotation:");
   m_output << makeDumpValue(
                   std::string(stmt.typeAnnotation().identifier.lexeme()))
-           << '\n';
+           << ", "
+           << makeDumpValue(std::to_string(stmt.typeAnnotation().nullable))
+           << "\n";
 
   m_output << makeDumpProperty(childPrefix, COMMON_SYM, "Params:") << '\n';
   const auto paramsPrefix = makeDumpPrefix(childPrefix, false);
@@ -97,7 +100,13 @@ void AstDumper::visitFunctionDeclarationStmt(
     m_output << makeDumpProperty(paramsPrefix, isLast ? LAST_SYM : COMMON_SYM,
                                  std::to_string(i) + ":");
     m_output << makeDumpValue(std::string(stmt.params()[i].identifier.lexeme()))
-             << '\n';
+             << ": "
+             << makeDumpValue(std::string(
+                    stmt.params()[i].typeAnnotation.identifier.lexeme()))
+             << ", "
+             << makeDumpValue(
+                    std::to_string(stmt.params()[i].typeAnnotation.nullable))
+             << "\n";
   }
 
   m_output << makeDumpProperty(childPrefix, LAST_SYM, "Body:") << '\n';
@@ -164,10 +173,11 @@ void AstDumper::visitBlockStmt(const BlockStmt &stmt) {
       const bool isLast = i == annotation.captures.size() - 1;
       m_output << makeDumpProperty(annotationPrefix,
                                    isLast ? LAST_SYM : COMMON_SYM,
-                                   std::string(annotation.captures[i].lexeme())) << '\n';
+                                   std::string(annotation.captures[i].lexeme()))
+               << '\n';
     }
   }
-  
+
   m_output << makeDumpProperty(childPrefix, LAST_SYM, "Statements:") << '\n';
   const auto statementsPrefix = makeDumpPrefix(childPrefix, true);
   for (std::size_t i = 0; i < stmt.stmts().size(); ++i) {

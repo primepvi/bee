@@ -17,8 +17,8 @@ constexpr std::array typeEntries = std::to_array<TypeEntry>({
     {"uint", TypeKind::UInt},
     {"bool", TypeKind::Bool},
     {"string", TypeKind::String},
-    {"range", TypeKind::Range},
-    {"fn", TypeKind::Function},
+    {"Range", TypeKind::Range},
+    {"Function", TypeKind::Function},
     {"void", TypeKind::Void},
     {"null", TypeKind::Null},
     {"invalid", TypeKind::Invalid},
@@ -80,7 +80,7 @@ bool Type::isValidBinaryOperation(const Type &left, bee::lexer::TokenKind op,
   case TokenKind::GtSym:
   case TokenKind::GteSym:
   case TokenKind::DoubleDotSym:
-    return left.kind() == TypeKind::Int && right.kind() == TypeKind::Int;
+    return left.kind() == TypeKind::Int && right.kind() == TypeKind::Int && !left.nullable() && !right.nullable();
 
   case TokenKind::EqEqSym:
   case TokenKind::NeqSym:
@@ -89,7 +89,7 @@ bool Type::isValidBinaryOperation(const Type &left, bee::lexer::TokenKind op,
 
   case TokenKind::AndKw:
   case TokenKind::OrKw:
-    return left.kind() == TypeKind::Bool && right.kind() == TypeKind::Bool;
+    return left.kind() == TypeKind::Bool && right.kind() == TypeKind::Bool && !left.nullable() && !right.nullable();
 
   default:
     return false;
@@ -100,10 +100,10 @@ bool Type::isValidUnaryOperation(TokenKind op, const Type &operand) {
   switch (op) {
   case TokenKind::MinusSym:
   case TokenKind::PlusSym:
-    return operand.kind() == TypeKind::Int;
+    return operand.kind() == TypeKind::Int && !operand.nullable();
 
   case TokenKind::NotKw:
-    return operand.kind() == TypeKind::Bool;
+    return operand.kind() == TypeKind::Bool && !operand.nullable();
 
   default:
     return false;
@@ -121,7 +121,7 @@ std::string Type::toString() const {
 
   if (kind == TypeKind::Function) {
     const FunctionInfo &info = std::get<FunctionInfo>(m_info);
-    name += "(";
+    name += "[";
 
     std::size_t count = 0;
     for (const auto &param : info.params) {
@@ -132,10 +132,10 @@ std::string Type::toString() const {
         name += ",";
     }
 
-    name += "): " + info.returnType->toString();
+    name += "]: " + info.returnType->toString();
   } else if (kind == TypeKind::Range) {
     const RangeInfo &info = std::get<RangeInfo>(m_info);
-    name += "<" + info.type->toString() + ">";
+    name += "[" + info.type->toString() + "]";
   }
 
   std::string suffix = m_nullable ? "?" : "";
@@ -154,10 +154,14 @@ bool Type::isAssignableTo(const Type &other) const {
   if (m_kind != other.kind())
     return false;
 
+  if (m_nullable && !other.m_nullable)
+    return false;
+
   switch (m_kind) {
   case TypeKind::Function: {
     const FunctionInfo &info = std::get<FunctionInfo>(m_info);
     const FunctionInfo &otherInfo = std::get<FunctionInfo>(other.info());
+    
     if (info.params.size() != otherInfo.params.size())
       return false;
 
@@ -180,7 +184,7 @@ bool Type::isAssignableTo(const Type &other) const {
     
   default:
     return true;
-  }    
+  }
 }
 
 } // namespace bee::typechecker
