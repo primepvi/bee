@@ -12,6 +12,7 @@ enum class TokenKind {
   // Keywords
   LetKw,
   ConstKw,
+  LitKw,
   EchoKw,
   TrueKw,
   FalseKw,

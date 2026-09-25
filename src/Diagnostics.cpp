@@ -15,7 +15,7 @@ constexpr std::array diagnosticsMessageEntries =
         {DiagnosticCode::UnterminatedString, "Unterminated string has found."},
         {DiagnosticCode::UnterminatedChar, "Unterminated char has found."},
         {DiagnosticCode::InvalidCharLength,
-         "Attempt to create a char with more than one character."},        
+         "Attempt to create a char with more than one character."},
 
         // Parser
         {DiagnosticCode::ExpectedToken, "Expected '{0}', but received '{1}'."},
@@ -54,6 +54,8 @@ constexpr std::array diagnosticsMessageEntries =
          "{2} identifiers."},
         {DiagnosticCode::InvalidBlockCaptureScope,
          "The current scope don't provides capturables values."},
+        {DiagnosticCode::InvalidLitVarDeclaration,
+         "An lit variable only supports 'lit types'."},
     });
 
 std::string_view getDiagnosticLevelName(DiagnosticLevel level) {

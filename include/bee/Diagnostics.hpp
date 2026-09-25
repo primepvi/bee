@@ -41,6 +41,7 @@ enum class DiagnosticCode {
   NonFunctionCall,
   InvalidBlockCaptureCount,
   InvalidBlockCaptureScope,
+  InvalidLitVarDeclaration,
 };
 
 struct Diagnostic {

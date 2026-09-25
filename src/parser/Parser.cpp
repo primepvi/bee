@@ -97,7 +97,7 @@ std::unique_ptr<Expr> Parser::parsePrimaryExpr() {
   case TokenKind::StringLit:
   case TokenKind::IntegerLit:
   case TokenKind::FloatLit:
-  case TokenKind::CharLit:    
+  case TokenKind::CharLit:
     return parseLiteralExpr();
 
   case TokenKind::OpenParenSym:
@@ -117,7 +117,9 @@ std::unique_ptr<Expr> Parser::parsePrimaryExpr() {
 
   default: {
     if (!m_panic) {
-      m_bag.report(bee::DiagnosticLevel::Error, bee::DiagnosticCode::InvalidExpression, peek().span(), std::make_format_args());
+      m_bag.report(bee::DiagnosticLevel::Error,
+                   bee::DiagnosticCode::InvalidExpression, peek().span(),
+                   std::make_format_args());
       m_panic = true;
     }
 
@@ -163,6 +165,13 @@ std::unique_ptr<Expr> Parser::parseBinaryExpr(std::size_t precedence) {
 
 TypeAnnotation Parser::parseTypeAnnotation() {
   Token colon = eat();
+
+  bool lit = false;
+  if (peek().kind() == TokenKind::LitKw) {
+    lit = true;
+    eat();
+  }
+
   Token identifier = expectToken(TokenKind::Identifier, "type name");
 
   bool nullable = false;
@@ -183,6 +192,7 @@ TypeAnnotation Parser::parseTypeAnnotation() {
       .colon = colon,
       .identifier = identifier,
       .nullable = nullable,
+      .lit = lit,
       .span = annotationSpan,
   };
 }
@@ -205,6 +215,7 @@ std::unique_ptr<Stmt> Parser::parseNextStmt() {
   switch (peek().kind()) {
   case TokenKind::ConstKw:
   case TokenKind::LetKw:
+  case TokenKind::LitKw:    
     return parseVariableDeclarationStmt();
   case TokenKind::FnKw:
     return parseFunctionDeclarationStmt();
@@ -380,7 +391,9 @@ std::unique_ptr<Stmt> Parser::parseBlockStmt(std::span<TokenKind> endKinds) {
   }
 
   if (!hasMoreTokens()) {
-    m_bag.report(bee::DiagnosticLevel::Error, bee::DiagnosticCode::UnterminatedBlock, openKeyword.span(), std::make_format_args());
+    m_bag.report(bee::DiagnosticLevel::Error,
+                 bee::DiagnosticCode::UnterminatedBlock, openKeyword.span(),
+                 std::make_format_args());
     m_panic = true;
   }
 
@@ -479,7 +492,9 @@ Token Parser::expectToken(TokenKind kind, std::string name) {
 
   if (!m_panic) {
     std::string_view lexeme = peek().lexeme();
-    m_bag.report(bee::DiagnosticLevel::Error, bee::DiagnosticCode::ExpectedToken, peek().span(), std::make_format_args(name, lexeme));
+    m_bag.report(bee::DiagnosticLevel::Error,
+                 bee::DiagnosticCode::ExpectedToken, peek().span(),
+                 std::make_format_args(name, lexeme));
     m_panic = true;
   }
 
@@ -500,7 +515,7 @@ bool Parser::canStartExpr() const {
   case TokenKind::NullKw:
   case TokenKind::TrueKw:
   case TokenKind::FalseKw:
-  case TokenKind::FloatLit:    
+  case TokenKind::FloatLit:
   case TokenKind::IntegerLit:
   case TokenKind::CharLit:
   case TokenKind::StringLit:

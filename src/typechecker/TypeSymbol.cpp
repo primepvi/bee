@@ -2,8 +2,8 @@
 
 namespace bee::typechecker {
 
-VariableSymbol::VariableSymbol(std::string_view name, bool constant, Type type)
-    : m_name(name), m_constant(constant), m_type(std::move(type)) {}
+  VariableSymbol::VariableSymbol(std::string_view name, bool constant, bool lit, bool hasLitValue, Type type)
+    : m_name(name), m_constant(constant), m_lit(lit), m_hasLitValue(hasLitValue), m_type(std::move(type)) {}
 
 FunctionSymbol::FunctionSymbol(std::string_view name, std::size_t arity,
                                Type type)

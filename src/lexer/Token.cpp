@@ -18,16 +18,27 @@ std::string Token::toString() const {
 }
 
 constexpr std::array keywordsEntries = std::to_array<TokenEntry>({
-    {TokenKind::LetKw, "let"},     {TokenKind::ConstKw, "const"},
-    {TokenKind::EchoKw, "echo"},   {TokenKind::TrueKw, "true"},
-    {TokenKind::FalseKw, "false"}, {TokenKind::NullKw, "null"},
-    {TokenKind::AndKw, "and"},     {TokenKind::OrKw, "or"},
-    {TokenKind::NotKw, "not"},     {TokenKind::ThenKw, "then"},
-    {TokenKind::EndKw, "end"},     {TokenKind::IfKw, "if"},
-    {TokenKind::ElseKw, "else"},   {TokenKind::WhileKw, "while"},
-    {TokenKind::ForKw, "for"},     {TokenKind::DoKw, "do"},
-    {TokenKind::WhenKw, "when"},   {TokenKind::OtherwiseKw, "otherwise"},
-    {TokenKind::FnKw, "fn"},       {TokenKind::ReturnKw, "return"},
+    {TokenKind::LetKw, "let"},
+    {TokenKind::ConstKw, "const"},
+    {TokenKind::LitKw, "lit"},
+    {TokenKind::EchoKw, "echo"},
+    {TokenKind::TrueKw, "true"},
+    {TokenKind::FalseKw, "false"},
+    {TokenKind::NullKw, "null"},
+    {TokenKind::AndKw, "and"},
+    {TokenKind::OrKw, "or"},
+    {TokenKind::NotKw, "not"},
+    {TokenKind::ThenKw, "then"},
+    {TokenKind::EndKw, "end"},
+    {TokenKind::IfKw, "if"},
+    {TokenKind::ElseKw, "else"},
+    {TokenKind::WhileKw, "while"},
+    {TokenKind::ForKw, "for"},
+    {TokenKind::DoKw, "do"},
+    {TokenKind::WhenKw, "when"},
+    {TokenKind::OtherwiseKw, "otherwise"},
+    {TokenKind::FnKw, "fn"},
+    {TokenKind::ReturnKw, "return"},
 });
 
 constexpr std::array symbolsEntries = std::to_array<TokenEntry>({
@@ -48,6 +59,7 @@ constexpr std::array tokenKindNameEntries = std::to_array<TokenEntry>({
     // Keywords
     {TokenKind::LetKw, "Let_Kw"},
     {TokenKind::ConstKw, "Const_Kw"},
+    {TokenKind::LitKw, "Lit_Kw"},
     {TokenKind::EchoKw, "Echo_KW"},
     {TokenKind::TrueKw, "True_KW"},
     {TokenKind::FalseKw, "False_KW"},
@@ -69,10 +81,10 @@ constexpr std::array tokenKindNameEntries = std::to_array<TokenEntry>({
     {TokenKind::Identifier, "Identifier"},
 
     // Literals
-    {TokenKind::FloatLit, "Float_LIT"},    
+    {TokenKind::FloatLit, "Float_LIT"},
     {TokenKind::IntegerLit, "Integer_LIT"},
     {TokenKind::StringLit, "String_LIT"},
-    {TokenKind::CharLit, "Char_LIT"},    
+    {TokenKind::CharLit, "Char_LIT"},
 
     // Symbols,
     {TokenKind::ColonSym, "Colon_SYM"},
@@ -153,7 +165,7 @@ std::size_t getBinaryOperatorPriority(TokenKind op) {
   case TokenKind::LtSym:
   case TokenKind::LteSym:
   case TokenKind::EqEqSym:
-  case TokenKind::NeqSym:    
+  case TokenKind::NeqSym:
     return 3;
   case TokenKind::OrKw:
     return 2;

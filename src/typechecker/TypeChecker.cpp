@@ -17,8 +17,7 @@ using bee::lexer::TokenKind;
 
 TypeChecker::TypeChecker(const bee::parser::Program &program,
                          bee::DiagnosticBag &bag)
-    : m_program(program), m_bag(bag),
-      m_scopeReturnType(Type(TypeKind::Void, false)) {
+    : m_program(program), m_bag(bag), m_scopeReturnType(Type::empty()) {
 
   TypeEnvironment globalEnv(TypeScopeKind::Global, nullptr);
 
@@ -43,8 +42,10 @@ TypeFlow TypeChecker::visitVariableDeclarationStmt(
   }
 
   std::unique_ptr<Type> valueType = visitExpr(*stmt.value());
-  std::unique_ptr<Type> variableType = std::make_unique<Type>(Type::invalid());
+  bool hasLitValue = valueType->isLit();
 
+  std::unique_ptr<Type> variableType = std::make_unique<Type>(Type::invalid());
+  
   if (stmt.typeAnnotation() != std::nullopt) {
     const bee::parser::TypeAnnotation annotation =
         stmt.typeAnnotation().value();
@@ -67,7 +68,9 @@ TypeFlow TypeChecker::visitVariableDeclarationStmt(
       variableType = std::make_unique<Type>(std::move(annotationType));
     }
   } else {
-    variableType = std::move(valueType);
+    variableType =
+        std::make_unique<Type>(valueType->kind(), valueType->isNullable(),
+                               stmt.isLit(), valueType->info());
   }
 
   if (variableType->isEmpty()) {
@@ -76,8 +79,14 @@ TypeFlow TypeChecker::visitVariableDeclarationStmt(
     variableType = std::make_unique<Type>(Type::invalid());
   }
 
-  bool isConstant = stmt.keyword().kind() == bee::lexer::TokenKind::ConstKw;
-  VariableSymbol variable(variableName, isConstant, std::move(*variableType));
+  if (stmt.isLit() && !variableType->isLit()) {
+    m_bag.report(DiagnosticLevel::Error, DiagnosticCode::InvalidLitVarDeclaration,
+                 stmt.span(), std::make_format_args());
+    variableType = std::make_unique<Type>(Type::invalid());    
+  }    
+
+  VariableSymbol variable(variableName, stmt.isConstant(), stmt.isLit(), hasLitValue,
+                          std::move(*variableType));
 
   m_env->putSymbol(std::make_unique<VariableSymbol>(std::move(variable)));
   return TypeFlow{.canContinue = true};
@@ -110,7 +119,7 @@ TypeFlow TypeChecker::visitFunctionDeclarationStmt(
     }
 
     paramTypes.push_back(paramType);
-    VariableSymbol paramSymbol(param.identifier.lexeme(), true,
+    VariableSymbol paramSymbol(param.identifier.lexeme(), true, false, paramType.isLit(),
                                std::move(paramType));
     functionEnv.putSymbol(
         std::make_unique<VariableSymbol>(std::move(paramSymbol)));
@@ -231,7 +240,7 @@ TypeFlow TypeChecker::visitBlockStmt(const bee::parser::BlockStmt &stmt) {
 
     if (m_env->scopeKind() == TypeScopeKind::ForLoop) {
       auto forCapturables = std::to_array<Type>({
-          Type::fromLexeme("int"),
+          Type::fromLexeme("int", false),
       });
 
       if (annotation.captures.size() > forCapturables.size()) {
@@ -249,7 +258,7 @@ TypeFlow TypeChecker::visitBlockStmt(const bee::parser::BlockStmt &stmt) {
         Type capturableType =
             i < forCapturables.size() ? forCapturables[i] : Type::invalid();
 
-        VariableSymbol captureSymbol(captureToken.lexeme(), true,
+        VariableSymbol captureSymbol(captureToken.lexeme(), true, false, false,
                                      capturableType);
         blockEnv.putSymbol(
             std::make_unique<VariableSymbol>(std::move(captureSymbol)));
@@ -261,7 +270,7 @@ TypeFlow TypeChecker::visitBlockStmt(const bee::parser::BlockStmt &stmt) {
 
       for (std::size_t i = 0; i < annotation.captures.size(); i++) {
         bee::lexer::Token captureToken = annotation.captures[i];
-        VariableSymbol captureSymbol(captureToken.lexeme(), true,
+        VariableSymbol captureSymbol(captureToken.lexeme(), true, false, false,
                                      Type::invalid());
         blockEnv.putSymbol(
             std::make_unique<VariableSymbol>(std::move(captureSymbol)));
@@ -278,7 +287,7 @@ TypeFlow TypeChecker::visitBlockStmt(const bee::parser::BlockStmt &stmt) {
       break;
 
     flow = visitStmt(*innerStmt);
-  }
+  }  
 
   m_env = std::move(prevEnv);
   return flow;
@@ -343,18 +352,18 @@ std::unique_ptr<Type>
 TypeChecker::visitLiteralExpr(const bee::parser::LiteralExpr &expr) {
   switch (expr.value().kind()) {
   case TokenKind::IntegerLit:
-    return std::make_unique<Type>(Type::fromLexeme("int"));
+    return std::make_unique<Type>(Type::fromLexeme("int", true));
   case TokenKind::FloatLit:
-    return std::make_unique<Type>(Type::fromLexeme("float"));
+    return std::make_unique<Type>(Type::fromLexeme("float", true));
   case TokenKind::StringLit:
-    return std::make_unique<Type>(Type::fromLexeme("string"));
+    return std::make_unique<Type>(Type::fromLexeme("string", true));
   case TokenKind::CharLit:
-    return std::make_unique<Type>(Type::fromLexeme("char"));
+    return std::make_unique<Type>(Type::fromLexeme("char", true));
   case TokenKind::TrueKw:
   case TokenKind::FalseKw:
-    return std::make_unique<Type>(Type::fromLexeme("bool"));
+    return std::make_unique<Type>(Type::fromLexeme("bool", true));
   case TokenKind::NullKw:
-    return std::make_unique<Type>(Type::fromLexeme("null"));
+    return std::make_unique<Type>(Type::fromLexeme("null", true));
   default:
     return std::make_unique<Type>(Type::invalid());
   }
@@ -371,7 +380,10 @@ TypeChecker::visitIdentifierExpr(const bee::parser::IdentifierExpr &expr) {
 
   std::shared_ptr<TypeSymbol> symbol =
       m_env->getSymbol(expr.identifier().lexeme());
-  return std::make_unique<Type>(std::move(symbol->type()));
+  const auto &innerType = symbol->type();
+
+  return std::make_unique<Type>(innerType.kind(), innerType.isNullable(),
+                                symbol->provideLitValue(), innerType.info());  
 }
 
 std::unique_ptr<Type>
@@ -437,7 +449,8 @@ TypeChecker::visitBinaryExpr(const bee::parser::BinaryExpr &expr) {
   case TokenKind::StarSym:
   case TokenKind::SlashSym:
   case TokenKind::PercentageSym:
-    return leftType;
+    return std::make_unique<Type>(leftType->kind(), false,
+                                  leftType->isLit() && rightType->isLit());
 
   case TokenKind::LtSym:
   case TokenKind::LteSym:
@@ -447,7 +460,8 @@ TypeChecker::visitBinaryExpr(const bee::parser::BinaryExpr &expr) {
   case TokenKind::NeqSym:
   case TokenKind::AndKw:
   case TokenKind::OrKw:
-    return std::make_unique<Type>(Type::fromLexeme("bool"));
+    return std::make_unique<Type>(
+        Type::fromLexeme("bool", leftType->isLit() && rightType->isLit()));
 
   case TokenKind::DoubleDotSym:
     return std::make_unique<Type>(Type::range(std::move(*leftType)));
@@ -473,7 +487,8 @@ TypeChecker::visitUnaryExpr(const bee::parser::UnaryExpr &expr) {
   return expr.op().kind() == TokenKind::MinusSym &&
                      operandType->kind() == TypeKind::UInt ||
                  operandType->kind() == TypeKind::Int
-             ? std::make_unique<Type>(Type::fromLexeme("int"))
+             ? std::make_unique<Type>(
+                   Type::fromLexeme("int", operandType->isLit()))
              : std::move(operandType);
 }
 

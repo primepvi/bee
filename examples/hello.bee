@@ -1,7 +1,10 @@
-const a: float = 11.0
-const b: char = '🐝'
-const c: string = "hello"
+const ax: int = 10
+const ay = 10
 
-echo a
-echo b
-echo c
+lit bx = 20
+const by: lit int = 30
+
+fn sum(x: lit int, y: lit int): lit int -> x + y
+
+lit result = sum(ax * bx, ay * by)
+echo result

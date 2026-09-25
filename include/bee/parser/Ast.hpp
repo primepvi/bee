@@ -195,7 +195,10 @@ using Program = std::vector<std::unique_ptr<Stmt>>;
 struct TypeAnnotation {
   bee::lexer::Token colon;
   bee::lexer::Token identifier;
+  
   bool nullable;
+  bool lit;
+  
   bee::SourceSpan span;
 };
 
@@ -214,9 +217,19 @@ public:
   inline bee::SourceSpan span() const override { return m_span; }
   inline const bee::lexer::Token &keyword() const { return m_keyword; }
   inline const bee::lexer::Token &identifier() const { return m_identifier; }
+  
   inline const std::optional<TypeAnnotation> &typeAnnotation() const {
     return m_typeAnnotation;
   }
+
+  inline const bool isConstant() const {
+    return m_keyword.kind() == bee::lexer::TokenKind::ConstKw;
+  }
+  
+  inline const bool isLit() const {
+    return m_keyword.kind() == bee::lexer::TokenKind::LitKw;
+  }
+  
   inline const std::unique_ptr<Expr> &value() const { return m_value; }
 
 private:
@@ -378,7 +391,9 @@ public:
     return m_captureAnnotation;
   }
 
-  inline const bee::lexer::Token& closeKeyword() const { return m_closeKeyword; }
+  inline const bee::lexer::Token &closeKeyword() const {
+    return m_closeKeyword;
+  }
 
   inline const std::vector<std::unique_ptr<Stmt>> &stmts() const {
     return m_stmts;

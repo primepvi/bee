@@ -28,17 +28,17 @@ constexpr std::array typeEntries = std::to_array<TypeEntry>({
     {"invalid", TypeKind::Invalid},
 });
 
-Type::Type(TypeKind kind, bool nullable)
-    : m_kind(kind), m_nullable(nullable), m_info(std::monostate{}) {}
-Type::Type(TypeKind kind, bool nullable, TypeInfo info)
-    : m_kind(kind), m_nullable(nullable), m_info(std::move(info)) {}
+  Type::Type(TypeKind kind, bool nullable, bool lit)
+    : m_kind(kind), m_nullable(nullable), m_lit(lit), m_info(std::monostate{}) {}
+  Type::Type(TypeKind kind, bool nullable, bool lit, TypeInfo info)
+    : m_kind(kind), m_nullable(nullable), m_lit(lit), m_info(std::move(info)) {}
 
-Type Type::fromLexeme(std::string_view lexeme) {
+  Type Type::fromLexeme(std::string_view lexeme, bool lit) {
   auto it = std::find_if(
       typeEntries.begin(), typeEntries.end(),
       [lexeme](const TypeEntry &entry) { return entry.lexeme == lexeme; });
   TypeKind kind = it == typeEntries.end() ? TypeKind::Invalid : it->kind;
-  return Type(kind, false);
+  return Type(kind, false, lit);
 }
 
 Type Type::fromAnnotation(TypeAnnotation annotation) {
@@ -48,7 +48,7 @@ Type Type::fromAnnotation(TypeAnnotation annotation) {
       [lexeme](const TypeEntry &entry) { return entry.lexeme == lexeme; });
 
   TypeKind kind = it == typeEntries.end() ? TypeKind::Invalid : it->kind;
-  return Type(kind, annotation.nullable);
+  return Type(kind, annotation.nullable, annotation.lit);
 }
 
 Type Type::function(std::vector<Type> paramsTypes, Type returnType) {
@@ -57,7 +57,7 @@ Type Type::function(std::vector<Type> paramsTypes, Type returnType) {
       .returnType = std::make_unique<Type>(std::move(returnType)),
   };
 
-  return Type(TypeKind::Function, false, std::move(info));
+  return Type(TypeKind::Function, false, false, std::move(info));
 }
 
 Type Type::range(Type type) {
@@ -65,11 +65,11 @@ Type Type::range(Type type) {
       .type = std::make_unique<Type>(std::move(type)),
   };
 
-  return Type(TypeKind::Range, false, std::move(info));
+  return Type(TypeKind::Range, false, type.isLit(), std::move(info));
 }
 
-Type Type::invalid() { return Type(TypeKind::Invalid, false); }
-Type Type::empty() { return Type(TypeKind::Void, false); }
+  Type Type::invalid() { return Type(TypeKind::Invalid, false, false); }
+  Type Type::empty() { return Type(TypeKind::Void, false, false); }
 
 bool Type::isValidBinaryOperation(const Type &left, bee::lexer::TokenKind op,
                                   const Type &right) {
@@ -149,7 +149,7 @@ std::string Type::toString() const {
 
   std::string suffix = m_nullable ? "?" : "";
 
-  return std::format("{}{}", name, suffix);
+  return std::format("{}{}{}", m_lit ? "lit " : "", name, suffix);
 }
 
 bool Type::isAssignableTo(const Type &other) const {
@@ -163,7 +163,10 @@ bool Type::isAssignableTo(const Type &other) const {
   if (m_kind != other.kind())
     return false;
 
-  if (m_nullable && !other.m_nullable)
+  if (m_nullable && !other.isNullable())
+    return false;
+
+  if (!m_lit && other.isLit())
     return false;
 
   switch (m_kind) {

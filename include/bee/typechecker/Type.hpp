@@ -45,9 +45,10 @@ using TypeInfo = std::variant<std::monostate, RangeInfo, FunctionInfo>;
 
 class Type {
 public:
-  Type(TypeKind kind, bool nullable);
-  Type(TypeKind kind, bool nullable, TypeInfo info);
-  static Type fromLexeme(std::string_view lexeme);
+  Type(TypeKind kind, bool nullable, bool lit);
+  Type(TypeKind kind, bool nullable, bool lit, TypeInfo info);
+  
+  static Type fromLexeme(std::string_view lexeme, bool lit);
   static Type fromAnnotation(bee::parser::TypeAnnotation annotation);
 
   static Type function(std::vector<Type> paramsTypes, Type returnType);
@@ -66,6 +67,7 @@ public:
   inline TypeKind kind() const { return m_kind; }
   inline const TypeInfo &info() const { return m_info; }
   inline bool isNullable() const { return m_nullable; }
+  inline bool isLit() const { return m_lit; }
   
   inline bool isNumeric() const {
     return m_kind == TypeKind::Int || m_kind == TypeKind::UInt ||
@@ -82,7 +84,7 @@ public:
 
 private:
   TypeKind m_kind;
-  bool m_nullable;
+  bool m_nullable, m_lit;
   TypeInfo m_info;
 };
 
