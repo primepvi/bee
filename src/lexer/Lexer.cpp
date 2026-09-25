@@ -133,8 +133,10 @@ Token Lexer::lexNumber() {
   bool isFloat = false;
 
   while (hasMoreTokens() && isdigit(peek()) || (peek() == '.' && !isFloat)) {
-
-    if (peek() == '.')
+    // double dot sym
+    if (peek() == '.' && lookahead() == '.')
+      break;    
+    else if (peek() == '.')
       isFloat = true;
 
     advance();

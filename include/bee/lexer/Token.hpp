@@ -31,6 +31,7 @@ enum class TokenKind {
   OtherwiseKw,
   FnKw,
   ReturnKw,
+  AsKw,
   Identifier,
 
   // Literals

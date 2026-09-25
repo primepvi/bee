@@ -39,6 +39,7 @@ constexpr std::array keywordsEntries = std::to_array<TokenEntry>({
     {TokenKind::OtherwiseKw, "otherwise"},
     {TokenKind::FnKw, "fn"},
     {TokenKind::ReturnKw, "return"},
+    {TokenKind::AsKw, "as"},
 });
 
 constexpr std::array symbolsEntries = std::to_array<TokenEntry>({
@@ -78,6 +79,7 @@ constexpr std::array tokenKindNameEntries = std::to_array<TokenEntry>({
     {TokenKind::OtherwiseKw, "Otherwise_KW"},
     {TokenKind::FnKw, "Fn_KW"},
     {TokenKind::ReturnKw, "Return_KW"},
+    {TokenKind::AsKw, "as"},    
     {TokenKind::Identifier, "Identifier"},
 
     // Literals
@@ -85,7 +87,7 @@ constexpr std::array tokenKindNameEntries = std::to_array<TokenEntry>({
     {TokenKind::IntegerLit, "Integer_LIT"},
     {TokenKind::StringLit, "String_LIT"},
     {TokenKind::CharLit, "Char_LIT"},
-    {TokenKind::AtomLit, "Atom_LIT"},    
+    {TokenKind::AtomLit, "Atom_LIT"},
 
     // Symbols,
     {TokenKind::ColonSym, "Colon_SYM"},

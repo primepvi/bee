@@ -1,15 +1,15 @@
-const ax: int = 10
-const ay = 10
-
-lit bx = 20
-const by: lit int = 30
-
-fn sum(x: lit int, y: lit int): lit int do
-   return x + y
+fn fizz_buzz(): void do
+    for 0..100 do |i|
+        if i % 3 == 0 and i % 5 == 0 do
+          echo "FizzBuzz"
+        else if i % 3 == 0 do
+          echo "Fizz"
+        else if i % 5 == 0 do
+          echo "Buzz"
+        else do
+          echo i
+        end
+    end
 end
 
-lit result = sum(ax * bx, ay * by)
-echo result
-
-const hello: atom = :hello
-echo hello
+fizz_buzz()

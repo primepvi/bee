@@ -21,7 +21,7 @@ constexpr std::array typeEntries = std::to_array<TypeEntry>({
     {"bool", TypeKind::Bool},
     {"string", TypeKind::String},
     {"char", TypeKind::Char},
-    {"atom", TypeKind::Atom},    
+    {"atom", TypeKind::Atom},
     {"Range", TypeKind::Range},
     {"Function", TypeKind::Function},
     {"void", TypeKind::Void},
@@ -29,12 +29,13 @@ constexpr std::array typeEntries = std::to_array<TypeEntry>({
     {"invalid", TypeKind::Invalid},
 });
 
-  Type::Type(TypeKind kind, bool nullable, bool lit)
-    : m_kind(kind), m_nullable(nullable), m_lit(lit), m_info(std::monostate{}) {}
-  Type::Type(TypeKind kind, bool nullable, bool lit, TypeInfo info)
+Type::Type(TypeKind kind, bool nullable, bool lit)
+    : m_kind(kind), m_nullable(nullable), m_lit(lit), m_info(std::monostate{}) {
+}
+Type::Type(TypeKind kind, bool nullable, bool lit, TypeInfo info)
     : m_kind(kind), m_nullable(nullable), m_lit(lit), m_info(std::move(info)) {}
 
-  Type Type::fromLexeme(std::string_view lexeme, bool lit) {
+Type Type::fromLexeme(std::string_view lexeme, bool lit) {
   auto it = std::find_if(
       typeEntries.begin(), typeEntries.end(),
       [lexeme](const TypeEntry &entry) { return entry.lexeme == lexeme; });
@@ -69,8 +70,8 @@ Type Type::range(Type type) {
   return Type(TypeKind::Range, false, type.isLit(), std::move(info));
 }
 
-  Type Type::invalid() { return Type(TypeKind::Invalid, false, false); }
-  Type Type::empty() { return Type(TypeKind::Void, false, false); }
+Type Type::invalid() { return Type(TypeKind::Invalid, false, false); }
+Type Type::empty() { return Type(TypeKind::Void, false, false); }
 
 bool Type::isValidBinaryOperation(const Type &left, bee::lexer::TokenKind op,
                                   const Type &right) {
@@ -84,9 +85,10 @@ bool Type::isValidBinaryOperation(const Type &left, bee::lexer::TokenKind op,
   case TokenKind::LteSym:
   case TokenKind::GtSym:
   case TokenKind::GteSym:
-    return left.isNumeric() && right.isNumeric() && left.kind() == right.kind() &&
-           !left.isNullable() && !right.isNullable();
-    
+    return left.isNumeric() && right.isNumeric() &&
+           left.kind() == right.kind() && !left.isNullable() &&
+           !right.isNullable();
+
   case TokenKind::DoubleDotSym:
     return left.kind() == TypeKind::Int && right.kind() == TypeKind::Int &&
            !left.isNullable() && !right.isNullable();
@@ -131,7 +133,7 @@ std::string Type::toString() const {
 
   if (kind == TypeKind::Function) {
     const FunctionInfo &info = std::get<FunctionInfo>(m_info);
-    name += "[";
+    name += "(";
 
     std::size_t count = 0;
     for (const auto &param : info.params) {
@@ -142,15 +144,44 @@ std::string Type::toString() const {
         name += ",";
     }
 
-    name += "]: " + info.returnType->toString();
+    name += "): " + info.returnType->toString();
   } else if (kind == TypeKind::Range) {
     const RangeInfo &info = std::get<RangeInfo>(m_info);
-    name += "[" + info.type->toString() + "]";
+    name += "<" + info.type->toString() + ">";
   }
 
   std::string suffix = m_nullable ? "?" : "";
 
   return std::format("{}{}{}", m_lit ? "lit " : "", name, suffix);
+}
+
+bool Type::canWide(const Type &other) const {
+  if (isEmpty() || isInvalid() || other.isEmpty() || other.isInvalid())
+    return false;
+
+  if (m_kind == TypeKind::Null)
+    return other.kind() == TypeKind::Null;
+
+  if (m_nullable && !other.isNullable())
+    return false;
+
+  TypeKind from = m_kind;
+  TypeKind to = other.kind();
+
+  switch (from) {
+  case TypeKind::Byte:
+    return to == TypeKind::Int || to == TypeKind::Float;
+
+  case TypeKind::UByte:
+    return to == TypeKind::Int || to == TypeKind::UInt ||
+           to == TypeKind::Float;
+
+  case TypeKind::Float:
+    return to == TypeKind::Int;
+
+  default:
+    return false;
+  }
 }
 
 bool Type::isAssignableTo(const Type &other) const {
@@ -161,7 +192,7 @@ bool Type::isAssignableTo(const Type &other) const {
       other.isInvalid())
     return false;
 
-  if (m_kind != other.kind())
+  if (m_kind != other.kind() && !canWide(other))
     return false;
 
   if (m_nullable && !other.isNullable())

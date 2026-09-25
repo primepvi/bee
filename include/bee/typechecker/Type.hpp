@@ -64,7 +64,9 @@ public:
                                     const Type &operand);
 
   std::string toString() const;
-  bool isAssignableTo(const Type &other) const;
+  
+  bool canWide(const Type &other) const;  
+  bool isAssignableTo(const Type &other) const;  
 
   inline TypeKind kind() const { return m_kind; }
   inline const TypeInfo &info() const { return m_info; }
