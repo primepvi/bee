@@ -215,6 +215,15 @@ Interpreter::visitLiteralExpr(const bee::parser::LiteralExpr &expr) {
     return std::make_unique<CharValue>(value);
   }
 
+  case TokenKind::AtomLit: {
+    std::string name = std::string(token.lexeme().substr(1));
+    if (!m_atoms.contains(name)) {
+      m_atoms.insert_or_assign(name, m_atoms.size() + 1);
+    }
+
+    return std::make_unique<AtomValue>(name, m_atoms.at(name));    
+  }    
+
   case TokenKind::NullKw:
     return std::make_unique<NullValue>();
 

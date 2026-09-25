@@ -41,9 +41,10 @@ private:
   void skipWhitespaces();
   Token lexKeyword();
   Token lexString();
-  Token lexNumber();
-  Token lexSymbol();
   Token lexChar();
+  Token lexNumber();
+  Token lexAtom();
+  Token lexSymbol();
 };
 
 } // namespace bee::lexer

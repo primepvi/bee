@@ -21,6 +21,7 @@ enum class ValueKind {
   Bool,
   String,
   Char,
+  Atom,
   Range,
   Function,
   Null,
@@ -219,6 +220,29 @@ private:
   char32_t m_value;
 };
 
+class AtomValue : public Value {
+public:
+  AtomValue(std::string name, std::size_t id);
+
+  inline ValueKind kind() const override { return ValueKind::Atom; }
+  inline std::string toString() const override {
+    return std::format(":{}", m_name);
+  }
+
+  inline std::unique_ptr<Value> clone() const override {
+    return std::make_unique<AtomValue>(*this);
+  }
+
+  bool equals(const Value &other) const override;
+
+  inline const std::string &name() const { return m_name; }
+  inline std::size_t id() const { return m_id; }
+
+private:
+  std::string m_name;
+  std::size_t m_id;
+};
+
 class RangeValue : public Value {
 public:
   RangeValue(std::int64_t start, std::int64_t end);
@@ -279,7 +303,7 @@ public:
   inline std::unique_ptr<Value> clone() const override {
     return std::make_unique<NullValue>();
   }
-  
+
   inline bool equals(const Value &other) const override {
     return other.kind() == this->kind();
   }

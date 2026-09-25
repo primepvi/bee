@@ -98,6 +98,7 @@ std::unique_ptr<Expr> Parser::parsePrimaryExpr() {
   case TokenKind::IntegerLit:
   case TokenKind::FloatLit:
   case TokenKind::CharLit:
+  case TokenKind::AtomLit:    
     return parseLiteralExpr();
 
   case TokenKind::OpenParenSym:
@@ -519,6 +520,7 @@ bool Parser::canStartExpr() const {
   case TokenKind::IntegerLit:
   case TokenKind::CharLit:
   case TokenKind::StringLit:
+  case TokenKind::AtomLit:    
   case TokenKind::OpenParenSym:
   case TokenKind::CloseParenSym:
   case TokenKind::Identifier:

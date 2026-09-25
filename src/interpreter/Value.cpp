@@ -2,6 +2,7 @@
 #include "bee/parser/Ast.hpp"
 
 #include <cmath>
+#include <string_view>
 
 namespace bee::interpreter {
 
@@ -562,6 +563,16 @@ bool CharValue::equals(const Value &other) const {
   const CharValue &otherValue = static_cast<const CharValue &>(other);
   return m_value == otherValue.value();
 }
+
+AtomValue::AtomValue(std::string name, std::size_t id)
+    : m_name(name), m_id(id) {}
+bool AtomValue::equals(const Value &other) const {
+  if (other.kind() != this->kind())
+    return false;
+
+  const AtomValue &otherValue = static_cast<const AtomValue &>(other);
+  return m_id == otherValue.id();
+}  
 
 RangeValue::RangeValue(std::int64_t start, std::int64_t end)
     : m_start(start), m_end(end) {}

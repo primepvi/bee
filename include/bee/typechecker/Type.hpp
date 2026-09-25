@@ -18,6 +18,7 @@ enum class TypeKind {
   Bool,
   String,
   Char,
+  Atom,
   Range,
   Function,
   Void,
@@ -41,13 +42,14 @@ struct RangeInfo {
   std::shared_ptr<const Type> type;
 };
 
-using TypeInfo = std::variant<std::monostate, RangeInfo, FunctionInfo>;
+using TypeInfo =
+    std::variant<std::monostate, RangeInfo, FunctionInfo>;
 
 class Type {
 public:
   Type(TypeKind kind, bool nullable, bool lit);
   Type(TypeKind kind, bool nullable, bool lit, TypeInfo info);
-  
+
   static Type fromLexeme(std::string_view lexeme, bool lit);
   static Type fromAnnotation(bee::parser::TypeAnnotation annotation);
 
@@ -68,7 +70,7 @@ public:
   inline const TypeInfo &info() const { return m_info; }
   inline bool isNullable() const { return m_nullable; }
   inline bool isLit() const { return m_lit; }
-  
+
   inline bool isNumeric() const {
     return m_kind == TypeKind::Int || m_kind == TypeKind::UInt ||
            m_kind == TypeKind::Byte || m_kind == TypeKind::UByte ||

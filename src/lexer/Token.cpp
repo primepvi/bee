@@ -85,6 +85,7 @@ constexpr std::array tokenKindNameEntries = std::to_array<TokenEntry>({
     {TokenKind::IntegerLit, "Integer_LIT"},
     {TokenKind::StringLit, "String_LIT"},
     {TokenKind::CharLit, "Char_LIT"},
+    {TokenKind::AtomLit, "Atom_LIT"},    
 
     // Symbols,
     {TokenKind::ColonSym, "Colon_SYM"},
